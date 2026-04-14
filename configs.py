@@ -12,7 +12,7 @@ class EvalConfig:
     full_metrics = []
 
     # Split parameters
-    test_size = None  # -- configure the test_size (from 0 to 1) --
+    test_size = 0.25  # -- configure the test_size (from 0 to 1) --
 
     # Loo parameters
-    top_n_value = None  # -- configure the numer of recommendations (> 1) --
+    top_n_value = 40  # -- configure the numer of recommendations (> 1) --

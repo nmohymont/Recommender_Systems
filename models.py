@@ -27,20 +27,32 @@ def get_top_n(predictions, n):
     rd.seed(0)
 
     # First map the predictions to each user.
-    top_n = defaultdict(list)
+    
+    top_n = defaultdict(list) #python tool to group predictions by userID without checking id the jey exists first
+
+
     for uid, iid, true_r, est, _ in predictions:
+        # _ means we do not need this value : true_r is real rating not needed as anti_testset (unspecified data),  _ is details
+
         top_n[uid].append((iid, est))
+
+        # uid (userID) is the key of the list
+        # iid (movieID), est is a tuple giving the movieID and the rating associated
 
     # Then sort the predictions for each user and retrieve the k highest ones.
     for uid, user_ratings in top_n.items():
-        rd.shuffle(user_ratings)
+        #user_ratings are the tuple gathering the movies and the rating given
+        # the sort is done on x[1] = rating not x[0] the movieID, but as they are in the same tuple,
+        # both data are connected when sorted
+
+        rd.shuffle(user_ratings) # shuffle to handle score ties randomly
         user_ratings.sort(key=lambda x: x[1], reverse=True)
         top_n[uid] = user_ratings[:n]
 
     return top_n
 
 
-# First algorithm
+# First algorithm prediction is always 2
 class ModelBaseline1(AlgoBase):
     def __init__(self):
         AlgoBase.__init__(self)
@@ -49,7 +61,7 @@ class ModelBaseline1(AlgoBase):
         return 2
 
 
-# Second algorithm
+# Second algorithm : prediction is random
 class ModelBaseline2(AlgoBase):
     def __init__(self):
         AlgoBase.__init__(self)
@@ -62,7 +74,7 @@ class ModelBaseline2(AlgoBase):
         return rd.uniform(self.trainset.rating_scale[0], self.trainset.rating_scale[1])
 
 
-# Third algorithm
+# Third algorithm : prediction global mean
 class ModelBaseline3(AlgoBase):
     def __init__(self):
         AlgoBase.__init__(self)
@@ -77,7 +89,7 @@ class ModelBaseline3(AlgoBase):
         return self.the_mean
 
 
-# Fourth Model
+# Fourth Model : prediction is SVD 100 latent factors
 class ModelBaseline4(SVD):
     def __init__(self):
         SVD.__init__(self, n_factors=100)
