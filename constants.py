@@ -4,7 +4,7 @@ from pathlib import Path
 
 class Constant:
 
-    DATA_PATH = Path('data/test')  # -- fill here the dataset size to use
+    DATA_PATH = Path('data/small')  # -- fill here the dataset size to use
 
     # Content
     CONTENT_PATH = DATA_PATH / 'content'
@@ -22,7 +22,7 @@ class Constant:
     RATING_COL = 'rating'
     TIMESTAMP_COL = 'timestamp'
     USER_ITEM_RATINGS = [USER_ID_COL, ITEM_ID_COL, RATING_COL]
-    RATING_SCALE = (0.5,5.0)
 
     # Rating scale
-    RATINGS_SCALE = None  # -- fill in here the ratings scale as a tuple (min_value, max_value)
+    RATINGS_SCALE = (0.5, 5.0) # -- configure the rating scale (min, max) --
+    EVALUATION_PATH = CONTENT_PATH.parent / "evaluation" # -- configure the path to export the evaluation report --
