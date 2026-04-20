@@ -1,11 +1,5 @@
-# Group XX - Movie Recommender System
+# Recommender_Systems
 
-Welcome in the README file :)
-Write here a few introduction words for your project. 
+The aim of this first coding exercise was the perform an exploratory analysis of the  given dataset, allowing us to gain an overall understanding of its structure and characteristics.
 
-If you want inspiration on how to write an awesome README, check this github repo : https://github.com/navendu-pottekkat/awesome-readme . But don't spend to much time on it. This is not the topic of this course.
-
-If you need help with the Markdown syntax, you might find some help here : https://www.markdownguide.org/basic-syntax/ .
-
-Good luck with your project. 
-May the force be with you.
+We were able to demonstrate the long-tail property and the high level of sparsity present in the movie data.
