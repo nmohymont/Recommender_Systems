@@ -10,7 +10,7 @@ class EvalConfig:
         ("baseline_3", ModelBaseline3, {}),
         ("SVD", SVD, {"random_state": 1}),  # model_name, model class, model parameters (dict)
     ]
-    split_metrics = ["rmse"]
+    split_metrics = ["mae","rmse","mse","fcp"]
     loo_metrics = ["hit_rate"]
     full_metrics = ["novelty"]
 
