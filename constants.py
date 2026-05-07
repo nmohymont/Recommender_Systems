@@ -26,3 +26,5 @@ class Constant:
     # Rating scale
     RATINGS_SCALE = (0.5, 5.0) # -- configure the rating scale (min, max) --
     EVALUATION_PATH = CONTENT_PATH.parent / "evaluation" # -- configure the path to export the evaluation report --
+
+    TAGS_FILENAME = "tags.csv"

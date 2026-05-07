@@ -5,12 +5,16 @@ from models import *
 class EvalConfig:
     
     models = [
-        ("baseline_1", ModelBaseline1, {}), 
-        ("baseline_2", ModelBaseline2, {}), 
-        ("baseline_3", ModelBaseline3, {}),
-        ("SVD", SVD, {"random_state": 1}),  # model_name, model class, model parameters (dict)
+        #("baseline_1", ModelBaseline1, {}), 
+        #("baseline_2", ModelBaseline2, {}), 
+        #("baseline_3", ModelBaseline3, {}),
+        ("SVD", SVD, {"random_state": 1}),
+        #("random_score", ContentBased, {"features_method":None, "regressor_method" :'random_score'}),
+        #("random_sample", ContentBased, {"features_method":None, "regressor_method" :'random_sample'}),
+        ("linear_regression", ContentBased, {"features_method":"title_length", "regressor_method" :'linear_regression'})
+         # model_name, model class, model parameters (dict)
     ]
-    split_metrics = ["mae","rmse","mse","fcp"]
+    split_metrics = ["rmse"] #"mae","rmse","mse","fcp"
     loo_metrics = ["hit_rate"]
     full_metrics = ["novelty"]
 
