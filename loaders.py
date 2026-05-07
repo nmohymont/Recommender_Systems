@@ -3,7 +3,7 @@ import pandas as pd
 
 # local imports
 from constants import Constant as C
-from surprise import Reader, Dataset # [cite: 33]
+from surprise import Reader, Dataset 
 import datetime # Nécessaire pour l'exportation
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -56,7 +56,7 @@ def export_evaluation_report(df):
     print(f"Rapport exporté avec succès : {filename}")
     pass
 
-def get_tfidf_tags_features(filepath='tags.csv', min_df=5, max_df=0.5):
+def get_tfidf_tags_features(filepath=C.CONTENT_PATH / C.TAGS_FILENAME, min_df=5, max_df=0.5):
     """
     Extrait, nettoie et applique un TF-IDF sur les tags des utilisateurs.
     Retourne un DataFrame avec les movieId en index et les tags en colonnes.
