@@ -12,7 +12,7 @@ from surprise import SVD
 from surprise import PredictionImpossible
 from surprise import dump
 
-from sklearn.linear_model import LinearRegression,Lasso, ElasticNet
+from sklearn.linear_model import LinearRegression,Lasso, ElasticNet, Ridge
 
 from sklearn.ensemble import RandomForestRegressor
 
@@ -166,6 +166,18 @@ class ContentBased(AlgoBase):
             # Appel de la fonction externe
             df_features = get_tfidf_tags_features(C.CONTENT_PATH/C.TAGS_FILENAME)
 
+        
+        elif features_method == 'genome':
+            df_items = load_items()
+            df_genome = pd.read_csv(C.CONTENT_PATH / 'genome-scores.csv')
+
+            df_genome_features = df_genome.pivot(
+                index='movieId', columns='tagId', values='relevance')
+            
+            df_genome_features.columns = [f'tag_{col}' for col in df_genome_features.columns]
+
+            df_features = df_genome_features.reindex(df_items.index).fillna(0)
+
         else: 
             pass # (implement other feature creations here)
             
@@ -229,9 +241,17 @@ class ContentBased(AlgoBase):
         elif self.regressor_method == 'random_forest':
             for u in self.user_profile:
                 X, y = self.prepare_user_data(u)
-                reg = RandomForestRegressor(n_estimators=50, max_depth=5, random_state=42)
+                reg = RandomForestRegressor(n_estimators=100, max_depth=8, random_state=42)
                 reg.fit(X, y)
                 self.user_profile[u] = reg
+        
+        elif self.regressor_method == "ridge_regression":
+            for u in self.user_profile:
+                X, y = self.prepare_user_data(u)
+                reg = Ridge(alpha=1.0, fit_intercept=True)
+                reg.fit(X, y)
+                self.user_profile[u] = reg
+
         else:
             pass
             # (implement here the regressor fitting)  
@@ -258,7 +278,7 @@ class ContentBased(AlgoBase):
             rd.seed()
             score = rd.choice(self.user_profile[u])
         
-        elif self.regressor_method in ['linear_regression', 'lasso_regression','random_forest']:
+        elif self.regressor_method in ['linear_regression', 'lasso_regression','random_forest', 'ridge_regression']:
             
             # 1. Convertir l'ID interne (i) en ID brut MovieLens
             raw_item_id = self.trainset.to_raw_iid(i)
