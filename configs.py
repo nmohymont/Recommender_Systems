@@ -11,10 +11,14 @@ class EvalConfig:
         #("SVD", SVD, {"random_state": 1}),
         #("random_score", ContentBased, {"features_method":None, "regressor_method" :'random_score'}),
         #("random_sample", ContentBased, {"features_method":None, "regressor_method" :'random_sample'}),
-        #("linear_regression", ContentBased, {"features_method":"title_length", "regressor_method" :'linear_regression'})
-        ("lasso_regression", ContentBased, {"features_method":"date_and_genres", "regressor_method" :'lasso_regression'})
-        #("random_forest", ContentBased, {"features_method":"date_and_genres", "regressor_method" :'random_forest'})
-
+        #("linear_regression", ContentBased, {"features_method":"title_length", "regressor_method" :'linear_regression'}),
+        #("ridge_regression_log", ContentBased, {"features_method":'visuals_log', "regressor_method" :'ridge_regression'}),
+        #("ridge_regression_quantile", ContentBased, {"features_method":'visuals_quantile', "regressor_method" :'ridge_regression'}),
+        #("ridge_regression_quantilelog", ContentBased, {"features_method": 'visuals_quantilelog', "regressor_method" :'ridge_regression'}),
+        ("random_forest_log", ContentBased, {"features_method": 'visuals_log', "regressor_method" :'random_forest_with_selection'}),
+        ("random_forest_quantile", ContentBased, {"features_method": 'visuals_quantile', "regressor_method" :'random_forest_with_selection'}),
+        ("random_forest-quantilelog", ContentBased, {"features_method": 'visuals_quantilelog', "regressor_method" :'random_forest_with_selection'}),
+         
          # model_name, model class, model parameters (dict)
     ]
     split_metrics = ["rmse"] #"mae","rmse","mse","fcp"

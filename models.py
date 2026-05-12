@@ -14,6 +14,12 @@ from surprise import dump
 
 from sklearn.linear_model import LinearRegression,Lasso, ElasticNet, Ridge
 
+from sklearn.feature_selection import SelectKBest, f_regression
+from sklearn.pipeline import Pipeline
+
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 from sklearn.ensemble import RandomForestRegressor
 
 from loaders import load_ratings, load_items, get_tfidf_tags_features
@@ -105,39 +111,12 @@ class ContentBased(AlgoBase):
         df_items = load_items()
         if features_method is None:
             df_features = None
+
         elif features_method == "title_length": # a naive method that creates only 1 feature based on title length
             df_features = df_items[C.LABEL_COL].apply(lambda x: len(x)).to_frame('n_character_title')
 
-        elif features_method == 'year':
-            # 1. La date (convertie en nombre)
-            df_features = df_items[C.LABEL_COL].str.extract(r'\((\d{4})\)').astype(float)
-            df_features.columns = ['release_year']
-            df_features['release_year'] = df_features['release_year'].fillna(df_features['release_year'].median())
-
-            # Min-Max normalization to get release_year in range(0 to 1) the same scale as categorial encoding
-            min_year = df_year['release_year'].min()
-            max_year = df_year['release_year'].max()
-            df_year['release_year'] = (df_year['release_year'] - min_year) / (max_year - min_year)
-
-        elif features_method == 'genres_one_hot_encoding_alone':
-            #Les genres (One-Hot Encoding, déjà entre 0 et 1)
-            df_features = df_items[C.GENRES_COL].str.get_dummies(sep='|')
-
-            # a approfondir pour faire du One Hot Encoding intéressant pour regrouper les features
-        elif features_method == 'genres_one_hot_encoding_features_engineering':
-            #Les genres (One-Hot Encoding, déjà entre 0 et 1)
-            df_features = df_items[C.GENRES_COL].str.get_dummies(sep='|')
-            
-            #  Feature Engineering (Top 5 Combinaisons) ---
-            # On crée de nouvelles colonnes basées sur la multiplication des genres simples
-            df_features['Comedy_Drama'] = df_features['Comedy'] * df_features['Drama']
-            df_features['Drama_Romance'] = df_features['Drama'] * df_features['Romance']
-            df_features['Comedy_Romance'] = df_features['Comedy'] * df_features['Romance']
-            df_features['Comedy_Drama_Romance'] = df_features['Comedy'] * df_features['Drama'] * df_features['Romance']
-            df_features['Drama_Thriller'] = df_features['Drama'] * df_features['Thriller']
-
         
-        elif features_method =="date_and_genres":
+        elif features_method == 'date':
             df_year = df_items[C.LABEL_COL].str.extract(r'\((\d{4})\)').astype(float)
             df_year.columns = ['release_year']
             df_year['release_year'] = df_year['release_year'].fillna(df_year['release_year'].median())
@@ -146,6 +125,12 @@ class ContentBased(AlgoBase):
             min_year = df_year['release_year'].min()
             max_year = df_year['release_year'].max()
             df_year['release_year'] = (df_year['release_year'] - min_year) / (max_year - min_year)
+            df_features = df_year
+    
+    
+        elif features_method =="date_and_genres":
+            df_year = self.create_content_features('date')
+            
             
             # 2. Les genres 
             df_genres = df_items[C.GENRES_COL].str.get_dummies(sep='|')
@@ -161,10 +146,58 @@ class ContentBased(AlgoBase):
             # 3. Assemblage du tableau final
             df_features = pd.concat([df_year, df_genres], axis=1)
 
-        elif features_method =='tfidf_tags':
+        elif features_method == 'genres_tfidf':
             
-            # Appel de la fonction externe
-            df_features = get_tfidf_tags_features(C.CONTENT_PATH/C.TAGS_FILENAME)
+            
+            # 1. Remplacer les '|' par des espaces pour faire des "phrases" de genres
+            # "Action|Sci-Fi" devient "Action Sci-Fi"
+            genres_as_sentences = df_items[C.GENRES_COL].str.replace('|', ' ')
+            
+            # 2. Initialiser le TF-IDF (pas besoin de min_df ou max_df car on a seulement ~20 genres de base)
+            tfidf_genres = TfidfVectorizer()
+            
+            # 3. Entraîner et transformer
+            tfidf_matrix = tfidf_genres.fit_transform(genres_as_sentences)
+            
+            # 4. Créer le DataFrame propre (avec un préfixe pour s'y retrouver plus tard)
+            df_features = pd.DataFrame(
+                tfidf_matrix.toarray(), 
+                columns=[f"genre_{g}" for g in tfidf_genres.get_feature_names_out()], 
+                index=df_items.index
+            )
+            
+        elif features_method == 'genres_tfidf_feature_enginnering':
+            
+            # 1. Préparation du texte
+            genres_as_sentences = df_items[C.GENRES_COL].str.replace('|', ' ')
+            
+            # 2. Application du TF-IDF
+            tfidf_genres = TfidfVectorizer()
+            tfidf_matrix = tfidf_genres.fit_transform(genres_as_sentences).toarray() # On passe en array
+            base_genre_names = tfidf_genres.get_feature_names_out()
+            
+            # 3. --- LA MAGIE DES INTERACTIONS ---
+            # degree=2 : Croiser les genres 2 par 2 maximum
+            # interaction_only=True : Ne pas faire (Action * Action), juste (Action * Comédie)
+            # include_bias=False : Ne pas rajouter de colonne remplie de "1"
+            poly = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+            
+            # Création de la méga-matrice avec toutes les multiplications !
+            poly_matrix = poly.fit_transform(tfidf_matrix)
+            
+            # Récupération des noms générés (ex: "action", "action comedy")
+            raw_poly_names = poly.get_feature_names_out(base_genre_names)
+            
+            # 4. Nettoyage des noms pour que ce soit joli (et utile pour la tâche 9 'Explain')
+            # "action comedy" -> "genre_action_comedy"
+            clean_names = [f"genre_{name.replace(' ', '_')}" for name in raw_poly_names]
+            
+            # 5. Création du DataFrame final
+            df_features = pd.DataFrame(
+                poly_matrix, 
+                columns=clean_names, 
+                index=df_items.index
+            )
 
         
         elif features_method == 'genome':
@@ -177,6 +210,37 @@ class ContentBased(AlgoBase):
             df_genome_features.columns = [f'tag_{col}' for col in df_genome_features.columns]
 
             df_features = df_genome_features.reindex(df_items.index).fillna(0)
+
+        # On regroupe les 3 méthodes en utilisant la valeur de features_method
+        elif features_method in ['visuals_log', 'visuals_quantile', 'visuals_quantilelog']:
+            
+            # On détermine le bon fichier en fonction de la méthode demandée
+            if features_method == 'visuals_log':
+                filename = 'LLVisualFeatures13K_Log.csv'
+            elif features_method == 'visuals_quantile':
+                filename = 'LLVisualFeatures13K_Quantile.csv'
+            else:
+                filename = 'LLVisualFeatures13K_QuantileLog.csv'
+                
+            visuals_path = C.CONTENT_PATH / 'visuals' / filename
+            df_visuals = pd.read_csv(visuals_path)
+            
+            df_visuals = df_visuals.set_index('ML_Id')
+            df_visuals.columns = [f'vis_{col}' for col in df_visuals.columns]
+            
+            df_features = df_visuals.reindex(df_items.index)
+            df_features = df_features.fillna(df_features.median())
+            
+            
+        elif features_method == 'all_features':
+
+            df_date = self.create_content_features('date')
+            df_genome = self.create_content_features('genome')
+            df_visuals = self.create_content_features('visuals_log')
+
+            df_genres_tfidf = self.create_content_features('genres_tfidf_feature_enginnering')
+            
+            df_features = pd.concat([df_items, df_genome,df_visuals, df_genres_tfidf], axis=1)
 
         else: 
             pass # (implement other feature creations here)
@@ -241,7 +305,7 @@ class ContentBased(AlgoBase):
         elif self.regressor_method == 'random_forest':
             for u in self.user_profile:
                 X, y = self.prepare_user_data(u)
-                reg = RandomForestRegressor(n_estimators=100, max_depth=8, random_state=42)
+                reg = RandomForestRegressor(n_estimators=100, max_depth=5, min_samples_leaf=2, max_features='sqrt', random_state=42)
                 reg.fit(X, y)
                 self.user_profile[u] = reg
         
@@ -252,17 +316,37 @@ class ContentBased(AlgoBase):
                 reg.fit(X, y)
                 self.user_profile[u] = reg
 
+        elif self.regressor_method == 'random_forest_with_selection':
+            for u in self.user_profile:
+                X, y = self.prepare_user_data(u)
+                
+                # S'il y a plus de colonnes que de données, on va filtrer !
+                n_samples, n_features = X.shape
+                
+                # On décide de garder maximum 20 features, ou moins s'il y a peu de données
+                k_best = min(20, max(1, n_samples // 2)) 
+                
+                # On crée un "Pipeline" : d'abord on filtre, ensuite on entraîne
+                model = Pipeline([
+                    ('feature_selection', SelectKBest(score_func=f_regression, k=k_best)),
+                    ('rf', RandomForestRegressor(n_estimators=100, max_depth=5, min_samples_leaf=2, max_features='sqrt', random_state=42))
+                ])
+                
+                # Fit le pipeline entier (il va sélectionner les colonnes, puis entraîner le RF)
+                model.fit(X, y)
+                self.user_profile[u] = model
+
         else:
             pass
             # (implement here the regressor fitting)  
-            
+            '''
         # --- AUTO-SAUVEGARDE DU MODÈLE À LA FIN DE L'ENTRAÎNEMENT ---
         dossier_destination = C.RECS_PATH
         os.makedirs(dossier_destination, exist_ok=True)
         chemin_fichier = os.path.join(dossier_destination, f"modele_{self.regressor_method}.p")
         dump.dump(chemin_fichier, algo=self)
         print(f"Modèle '{self.regressor_method}' sauvegardé avec succès sous {chemin_fichier}")
-        
+        '''
     def estimate(self, u, i):
         """Scoring component used for item filtering"""
         # First, handle cases for unknown users and items
@@ -278,7 +362,7 @@ class ContentBased(AlgoBase):
             rd.seed()
             score = rd.choice(self.user_profile[u])
         
-        elif self.regressor_method in ['linear_regression', 'lasso_regression','random_forest', 'ridge_regression']:
+        elif self.regressor_method in ['linear_regression', 'lasso_regression','random_forest', 'ridge_regression','elasticnet','random_forest_with_selection']:
             
             # 1. Convertir l'ID interne (i) en ID brut MovieLens
             raw_item_id = self.trainset.to_raw_iid(i)
