@@ -4,7 +4,7 @@ from pathlib import Path
 
 class Constant:
 
-    DATA_PATH = Path('data/small')  # -- fill here the dataset size to use
+    DATA_PATH = Path('data/hackathon')  # -- fill here the dataset size to use
 
     # Content
     CONTENT_PATH = DATA_PATH / 'content'
@@ -28,3 +28,5 @@ class Constant:
     EVALUATION_PATH = CONTENT_PATH.parent / "evaluation" # -- configure the path to export the evaluation report --
 
     TAGS_FILENAME = "tags.csv"
+
+    RECS_PATH = DATA_PATH / 'recs'

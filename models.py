@@ -1,5 +1,6 @@
 # standard library imports
 from collections import defaultdict
+import os
 
 # third parties imports
 import numpy as np
@@ -9,9 +10,11 @@ from surprise import AlgoBase
 from surprise import KNNWithMeans
 from surprise import SVD
 from surprise import PredictionImpossible
+from surprise import dump
 
-from sklearn.linear_model import LinearRegression
-from sklearn.linear_model import Lasso
+from sklearn.linear_model import LinearRegression,Lasso, ElasticNet
+
+from sklearn.ensemble import RandomForestRegressor
 
 from loaders import load_ratings, load_items, get_tfidf_tags_features
 
@@ -169,6 +172,24 @@ class ContentBased(AlgoBase):
             raise NotImplementedError(f'Feature method {features_method} not yet implemented')
         return df_features
     
+    def prepare_user_data(self, u):
+        """Prépare et retourne les features (X) et la cible (y) pour un utilisateur donné."""
+        feature_names = self.content_features.columns.tolist() 
+        ratings_list = self.trainset.ur[u]
+        
+        df_user = pd.DataFrame(ratings_list, columns=['item_id', 'user_ratings'])
+        df_user['item_id'] = df_user['item_id'].map(self.trainset.to_raw_iid)
+        
+        df_user = df_user.merge(
+            self.content_features,
+            how='left',
+            left_on='item_id',
+            right_index=True
+        )
+        
+        X = df_user[feature_names].values
+        y = df_user['user_ratings'].values
+        return X, y
 
     def fit(self, trainset):
         """Profile Learner"""
@@ -184,96 +205,43 @@ class ContentBased(AlgoBase):
             for u in self.user_profile:
                 self.user_profile[u] = [rating for _, rating in self.trainset.ur[u]]
         
-        elif self.regressor_method == 'linear_regression': # regression linéaire est la méthode 
-            # On récupère automatiquement tous les noms des colonnes de nos features !
-            feature_names = self.content_features.columns.tolist() 
-            
-            # 2. Boucle sur chaque utilisateur dans le dictionnaire self.user_profile 
+        elif self.regressor_method == 'linear_regression':
             for u in self.user_profile:
-                
-                # 3. Création du DataFrame df_user avec les colonnes item_id et user_ratings 
-                # En alimentant les notes de l'utilisateur via la méthode self.trainset.ur(u) 
-                ratings_list = self.trainset.ur[u]
-                df_user = pd.DataFrame(ratings_list, columns=['item_id', 'user_ratings'])
-                
-                # 4. Mapping de chaque inner_item_id vers un raw_item_id 
-                # Utilisation de la fonction pandas .map et du dictionnaire fourni par surprise 
-                df_user['item_id'] = df_user['item_id'].map(self.trainset.to_raw_iid)
-                
-                # 5. Fusion (merge) avec self.content_features 
-                df_user = df_user.merge(
-                    self.content_features,
-                    how='left', # créer une jointure gauche donc on garde df_user tableau de droite et on cherche les correspondants
-                    # si on ne trouve pas de correspondant on met un vide
-                    left_on='item_id', #est la clé 
-                    right_index=True
-                )
-
-                # .merge fusionne deux tableau en faisant une jointure
-                #df_user est le tableau de "gauche" et self.content_features tableau de droite
-                
-                
-                # 6. Décomposition en features (X) et cibles (y) 
-                # Utilisation de .values pour extraire les arrays numpy 
-                X = df_user[feature_names].values
-                y = df_user['user_ratings'].values
-                
-                # 7. Entraînement du régresseur avec l'option fit_intercept=False 
+                X, y = self.prepare_user_data(u)
                 reg = LinearRegression(fit_intercept=True)
                 reg.fit(X, y)
-
-                #fit_intercept= False rmse = 1.565 on ne détermine que Y = aX
-                #fit_intercept = True rmse = 0.983 ici on a un biais (ordonné à l'origine) Y = aX + b
-                
-                # 8. Assignation du régresseur linéaire à chaque utilisateur 
                 self.user_profile[u] = reg
-        
-        elif self.regressor_method == 'lasso_regression': # regression lasso pour ignorer les features pas importante 
-            # On récupère automatiquement tous les noms des colonnes de nos features !
-            feature_names = self.content_features.columns.tolist() 
-            
-            # 2. Boucle sur chaque utilisateur dans le dictionnaire self.user_profile 
+                
+        elif self.regressor_method == 'lasso_regression':
             for u in self.user_profile:
-                
-                # 3. Création du DataFrame df_user avec les colonnes item_id et user_ratings 
-                # En alimentant les notes de l'utilisateur via la méthode self.trainset.ur(u) 
-                ratings_list = self.trainset.ur[u]
-                df_user = pd.DataFrame(ratings_list, columns=['item_id', 'user_ratings'])
-                
-                # 4. Mapping de chaque inner_item_id vers un raw_item_id 
-                # Utilisation de la fonction pandas .map et du dictionnaire fourni par surprise 
-                df_user['item_id'] = df_user['item_id'].map(self.trainset.to_raw_iid)
-                
-                # 5. Fusion (merge) avec self.content_features 
-                df_user = df_user.merge(
-                    self.content_features,
-                    how='left', # créer une jointure gauche donc on garde df_user tableau de droite et on cherche les correspondants
-                    # si on ne trouve pas de correspondant on met un vide
-                    left_on='item_id', #est la clé 
-                    right_index=True
-                )
-
-                # .merge fusionne deux tableau en faisant une jointure
-                #df_user est le tableau de "gauche" et self.content_features tableau de droite
-                
-                
-                # 6. Décomposition en features (X) et cibles (y) 
-                # Utilisation de .values pour extraire les arrays numpy 
-                X = df_user[feature_names].values
-                y = df_user['user_ratings'].values
-                
-                # 7. Entraînement du régresseur avec l'option fit_intercept=False 
-                reg = Lasso(alpah=0.1, fit_intercept=True)
+                X, y = self.prepare_user_data(u)
+                reg = Lasso(alpha=0.1, fit_intercept=True)
                 reg.fit(X, y)
-
-                #fit_intercept= False
+                self.user_profile[u] = reg
                 
-                # 8. Assignation du régresseur linéaire à chaque utilisateur 
+        elif self.regressor_method == 'elasticnet':
+            for u in self.user_profile:
+                X, y = self.prepare_user_data(u)
+                reg = ElasticNet(alpha=0.1, l1_ratio=0.5, fit_intercept=True)
+                reg.fit(X, y)
                 self.user_profile[u] = reg
 
+        elif self.regressor_method == 'random_forest':
+            for u in self.user_profile:
+                X, y = self.prepare_user_data(u)
+                reg = RandomForestRegressor(n_estimators=50, max_depth=5, random_state=42)
+                reg.fit(X, y)
+                self.user_profile[u] = reg
         else:
             pass
             # (implement here the regressor fitting)  
+            
+        # --- AUTO-SAUVEGARDE DU MODÈLE À LA FIN DE L'ENTRAÎNEMENT ---
+        dossier_destination = C.RECS_PATH
+        os.makedirs(dossier_destination, exist_ok=True)
+        chemin_fichier = os.path.join(dossier_destination, f"modele_{self.regressor_method}.p")
+        dump.dump(chemin_fichier, algo=self)
+        print(f"Modèle '{self.regressor_method}' sauvegardé avec succès sous {chemin_fichier}")
         
     def estimate(self, u, i):
         """Scoring component used for item filtering"""
@@ -290,7 +258,7 @@ class ContentBased(AlgoBase):
             rd.seed()
             score = rd.choice(self.user_profile[u])
         
-        elif self.regressor_method == 'linear_regression':
+        elif self.regressor_method in ['linear_regression', 'lasso_regression','random_forest']:
             
             # 1. Convertir l'ID interne (i) en ID brut MovieLens
             raw_item_id = self.trainset.to_raw_iid(i)
