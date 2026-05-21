@@ -1,5 +1,5 @@
 # local imports
-from models import *
+from models_V3 import *
 
 
 class EvalConfig:
@@ -15,10 +15,18 @@ class EvalConfig:
         #("ridge_regression_log", ContentBased, {"features_method":'visuals_log', "regressor_method" :'ridge_regression'}),
         #("ridge_regression_quantile", ContentBased, {"features_method":'visuals_quantile', "regressor_method" :'ridge_regression'}),
         #("ridge_regression_quantilelog", ContentBased, {"features_method": 'visuals_quantilelog', "regressor_method" :'ridge_regression'}),
-        ("random_forest_log", ContentBased, {"features_method": 'visuals_log', "regressor_method" :'random_forest_with_selection'}),
-        ("random_forest_quantile", ContentBased, {"features_method": 'visuals_quantile', "regressor_method" :'random_forest_with_selection'}),
-        ("random_forest-quantilelog", ContentBased, {"features_method": 'visuals_quantilelog', "regressor_method" :'random_forest_with_selection'}),
-         
+        #("random_forest_log", ContentBased, {"features_method": 'visuals_log', "regressor_method" :'random_forest_with_selection'}),
+        #("random_forest_quantile", ContentBased, {"features_method": 'visuals_quantile', "regressor_method" :'random_forest_with_selection'}),
+        #("random_forest-quantilelog", ContentBased, {"features_method": 'visuals_quantilelog', "regressor_method" :'random_forest_with_selection'}),
+        
+        #("elasticnet_auto", ContentBased, {"features_method": 'all_features', "regressor_method" :'elasticnet_auto'}),
+        #("ridge", ContentBased, {"features_method": 'all_features', "regressor_method" :'ridge_regression'}),
+
+        ("ridge_V3", ContentBased, {"features_method": 'V3', "regressor_method" :'ridge_24'}),
+
+        
+        #("linear_svr", ContentBased, {"features_method": 'all_features', "regressor_method" :'linear_svr'}),
+        #("linear_svr_auto", ContentBased, {"features_method": 'all_features', "regressor_method" :'linear_svr_auto'}),
          # model_name, model class, model parameters (dict)
     ]
     split_metrics = ["rmse"] #"mae","rmse","mse","fcp"
@@ -30,3 +38,4 @@ class EvalConfig:
 
     # Loo parameters
     top_n_value = 40  # -- configure the number of recommendations (> 1) --
+

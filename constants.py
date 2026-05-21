@@ -18,6 +18,8 @@ class Constant:
     EVIDENCE_PATH = DATA_PATH / 'evidence'
     # - ratings
     RATINGS_FILENAME = 'ratings.csv'
+    RATINGS_TEST_FILENAME = 'ratings_test.csv'
+
     USER_ID_COL = 'userId'
     RATING_COL = 'rating'
     TIMESTAMP_COL = 'timestamp'
