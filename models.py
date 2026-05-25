@@ -893,6 +893,61 @@ class ContentBased(AlgoBase):
         dump.dump(chemin_fichier, algo=self)
         print(f"Modèle '{self.regressor_method}' sauvegardé avec succès sous {chemin_fichier}")
         '''
+
+        self.user_profile_explain = {
+            u: self.compute_user_explanation(u)
+            for u in trainset.all_users()
+        }
+
+        return self
+    
+    def compute_user_explanation(self, u):
+        X, y = self.prepare_user_data(u)
+        feature_names = X.columns.tolist()
+        X_values = X.values
+
+        if len(y) == 0:
+            return {feature: 0 for feature in feature_names}
+        
+        weights = y - np.min(y) + 1e-8
+        weighted_features = np.average(
+            X_values,
+            axis=0,
+            weights=weights
+        )
+
+        min_value = np.min(weighted_features)
+        max_value = np.max(weighted_features)
+
+        if max_value > min_value:
+            normalized_scores = (
+                weighted_features - min_value
+            ) / (max_value - min_value)
+        
+        else:
+            normalized_scores = weighted_features
+            
+        explanation = {
+            feature_names[i]: float(normalized_scores[i])
+            for i in range(len(feature_names))
+        }
+            
+        return explanation
+        
+    def explain(self, u):
+        """
+        Return the feature importance scores for a given user.
+        """
+        if u not in self.user_profile_explain:
+            try:
+                u = self.trainset.to_inner_uid(u)
+            except ValueError:
+                raise ValueError(f"User {u} not found in the trained model.")
+            
+        return self.user_profile_explain[u]
+        
+
+
     def estimate(self, u, i):
         """Scoring component used for item filtering"""
         # First, handle cases for unknown users and items

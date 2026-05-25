@@ -22,7 +22,7 @@ class EvalConfig:
         #("elasticnet_auto", ContentBased, {"features_method": 'all_features', "regressor_method" :'elasticnet_auto'}),
         #("ridge", ContentBased, {"features_method": 'all_features', "regressor_method" :'ridge_regression'}),
 
-        ("ridge_V3", ContentBased, {"features_method": 'V3', "regressor_method" :'ridge_24'}),
+        ("ridge_V3", ContentBased, {"features_method": 'V2', "regressor_method" :'ridge_24'}),
 
         
         #("linear_svr", ContentBased, {"features_method": 'all_features', "regressor_method" :'linear_svr'}),
