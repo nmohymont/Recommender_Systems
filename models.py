@@ -262,7 +262,7 @@ class ContentBased(AlgoBase):
             )
         elif features_method == 'nb_ratings':
             ratings = load_ratings()  
-            df_items = load_items() # ⚠️ INDISPENSABLE : On charge la liste de TOUS les films
+            df_items = load_items() #  INDISPENSABLE : On charge la liste de TOUS les films
         
             # 1. Calcul de base (ignore les films sans note)
             movie_stats = ratings.groupby(C.ITEM_ID_COL)[C.RATING_COL].agg(
@@ -387,7 +387,7 @@ class ContentBased(AlgoBase):
             df_features = df_visuals.reindex(df_items.index).fillna(0)
             
             
-        elif features_method == 'all_features':
+        elif features_method == 'all_features_V1':
 
             df_date = self.create_content_features('date')
             df_genome = self.create_content_features('genome')
@@ -443,7 +443,7 @@ class ContentBased(AlgoBase):
             else:
                 print("\n[INFO] Pas de fichier de coefficients — toutes les features utilisées.\n")
         
-        elif features_method == "V3":
+        elif features_method == "all_features_V2":
             df_features = pd.DataFrame(index=df_items.index)
 
             # 1. Year
