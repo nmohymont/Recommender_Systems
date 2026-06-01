@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <p class="eyebrow">Hybrid recommender system</p>
+    <h1>Find the right movie for you — or for the whole group.</h1>
+    <p class="subtitle">
+        MovieMatch combines user-based filtering, content-based filtering and SVD
+        to generate personalized and explainable recommendations.
+    </p>
+
+    <div class="hero-actions">
+        <a class="primary-button" href="{{ url_for('individual') }}">Get recommendations</a>
+        <a class="secondary-button" href="{{ url_for('group') }}">Start group night</a>
+    </div>
+</section>
+
+<section class="section-title">
+    <h2>Featured movies</h2>
+    <p>Movies ranked using a weighted score based on average rating and number of ratings.</p>
+</section>
+
+<section class="movie-grid">
+    {% for movie in featured_movies %}
+    <article class="movie-card">
+        <h3>{{ movie.title }}</h3>
+        <p class="genres">{{ movie.genres }}</p>
+
+        <div class="metrics-row">
+            <div>
+                <span>Rating</span>
+                <strong>{{ "%.2f"|format(movie.mean) }}</strong>
+            </div>
+
+            <div>
+                <span>Votes</span>
+                <strong>{{ movie["count"] }}</strong>
+            </div>
+
+            <div>
+                <span>Score</span>
+                <strong>{{ "%.2f"|format(movie.featured_score) }}</strong>
+            </div>
+        </div>
+    </article>
+    {% endfor %}
+</section>
+{% endblock %}

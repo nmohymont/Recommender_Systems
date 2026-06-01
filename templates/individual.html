@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-header">
+    <p class="eyebrow">Individual recommendation</p>
+    <h1>Get your personalized top-N movie list.</h1>
+    <p>
+        Select a user profile and generate personalized movie recommendations
+        using the hybrid recommender system.
+    </p>
+</section>
+
+<form method="POST" class="form-card">
+    <div class="form-group">
+        <label>User profile</label>
+        <select name="user_id">
+            {% for user in users %}
+            <option value="{{ user }}" {% if selected_user == user %}selected{% endif %}>
+                User {{ user }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>Number of recommendations</label>
+        <input type="number" name="n_recommendations" min="5" max="20" value="10">
+    </div>
+
+    <button class="primary-button" type="submit">
+        Generate recommendations
+    </button>
+</form>
+
+{% if recommendations %}
+<section class="section-title">
+    <h2>Recommended movies</h2>
+    <p>
+        Each recommendation includes the final hybrid score, the individual model scores,
+        and an explanation for the end user.
+    </p>
+</section>
+
+{% for movie in recommendations %}
+<article class="recommendation-card">
+    <div class="recommendation-header">
+        <h3>{{ loop.index }}. {{ movie.title }}</h3>
+        <span class="score-pill">Final {{ movie.final_score }}</span>
+    </div>
+
+    <p class="genres">{{ movie.genres }}</p>
+
+    <div class="score-grid three">
+        <div>
+            <span>SVD</span>
+            <strong>{{ movie.svd_score }}</strong>
+        </div>
+
+        <div>
+            <span>User-based</span>
+            <strong>{{ movie.user_based_score }}</strong>
+        </div>
+
+        <div>
+            <span>Content-based</span>
+            <strong>{{ movie.content_based_score }}</strong>
+        </div>
+    </div>
+
+    <div class="explanation-box">
+        <strong>Why this movie?</strong>
+        <p>{{ movie.explanation }}</p>
+    </div>
+</article>
+{% endfor %}
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-header">
+    <p class="eyebrow">Model evaluation</p>
+    <h1>Performance comparison</h1>
+    <p>Models are compared using RMSE, MAE, Recall@10, Coverage and Diversity.</p>
+</section>
+
+<table class="results-table">
+    <thead>
+        <tr>
+            <th>Model</th>
+            <th>Family</th>
+            <th>RMSE</th>
+            <th>MAE</th>
+            <th>Recall@10</th>
+            <th>Coverage</th>
+            <th>Diversity</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {% for row in results %}
+        <tr>
+            <td>{{ row.model }}</td>
+            <td>{{ row.family }}</td>
+            <td>{{ row.rmse }}</td>
+            <td>{{ row.mae }}</td>
+            <td>{{ row.recall }}</td>
+            <td>{{ row.coverage }}</td>
+            <td>{{ row.diversity }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<section class="interpretation-card">
+    <h2>Main interpretation</h2>
+    <p>
+        The best model in terms of RMSE and MAE is the item-based KNNBaseline model.
+        The best required user-based model is the user-based KNNBaseline model.
+        The custom Jaccard user-based model is important because it uses a similarity metric not implemented in Surprise.
+        The SVD model satisfies the latent factor requirement, while the content-based model supports explanations.
+    </p>
+</section>
+{% endblock %}

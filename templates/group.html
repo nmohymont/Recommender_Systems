@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-header">
+    <p class="eyebrow">Group recommendation</p>
+    <h1>Find a movie everyone can enjoy.</h1>
+    <p>
+        Select several users and optionally add movies the group already wants to watch.
+        The group score combines average satisfaction and least misery.
+    </p>
+</section>
+
+<form method="POST" class="form-card vertical-form">
+    <div class="form-group">
+        <label>Group members</label>
+        <select name="group_users" multiple size="8">
+            {% for user in users %}
+            <option value="{{ user }}">User {{ user }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>Wish-list movies</label>
+        <select name="selected_movies" multiple size="8">
+            {% for movie in movies %}
+            <option value="{{ movie.movieId }}">{{ movie.display }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>Number of recommendations</label>
+        <input type="number" name="n_recommendations" min="5" max="20" value="10">
+    </div>
+
+    <button class="primary-button" type="submit">Find group movie</button>
+</form>
+
+{% if group_recommendations %}
+<section class="section-title">
+    <h2>Best movies for the group</h2>
+</section>
+
+{% for movie in group_recommendations %}
+<article class="recommendation-card">
+    <div class="recommendation-header">
+        <h3>{{ loop.index }}. {{ movie.title }}</h3>
+        <span class="score-pill">Group {{ movie.group_score }}</span>
+    </div>
+
+    <p class="genres">{{ movie.genres }}</p>
+
+    <div class="score-grid three">
+        <div>
+            <span>Average</span>
+            <strong>{{ movie.average_score }}</strong>
+        </div>
+
+        <div>
+            <span>Least misery</span>
+            <strong>{{ movie.least_misery_score }}</strong>
+        </div>
+
+        <div>
+            <span>Group score</span>
+            <strong>{{ movie.group_score }}</strong>
+        </div>
+    </div>
+</article>
+{% endfor %}
+{% endif %}
+{% endblock %}

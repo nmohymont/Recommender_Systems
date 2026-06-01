@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MovieMatch</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="logo">🎬 MovieMatch</div>
+
+        <div class="nav-links">
+            <a href="{{ url_for('home') }}">Featured</a>
+            <a href="{{ url_for('individual') }}">Individual</a>
+            <a href="{{ url_for('group') }}">Group Night</a>
+            <a href="{{ url_for('evaluation') }}">Evaluation</a>
+        </div>
+    </nav>
+
+    <main class="page">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
