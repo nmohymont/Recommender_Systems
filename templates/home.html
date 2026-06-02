@@ -1,48 +1,373 @@
 {% extends "base.html" %}
-
 {% block content %}
+
 <section class="hero">
-    <p class="eyebrow">Hybrid recommender system</p>
-    <h1>Find the right movie for you — or for the whole group.</h1>
-    <p class="subtitle">
-        MovieMatch combines user-based filtering, content-based filtering and SVD
-        to generate personalized and explainable recommendations.
-    </p>
-
-    <div class="hero-actions">
-        <a class="primary-button" href="{{ url_for('individual') }}">Get recommendations</a>
-        <a class="secondary-button" href="{{ url_for('group') }}">Start group night</a>
-    </div>
+  <span class="eyebrow">Hybrid Recommender System</span>
+  <h1>Find the movie<br>made <em>for you.</em></h1>
+  <p class="subtitle">
+    MovieMatch combines item-based collaborative filtering and SVD
+    to generate personalized, explainable recommendations —
+    for you or the whole group.
+  </p>
+  <div class="hero-actions">
+    <a class="primary-button" href="{{ url_for('individual') }}">Get recommendations</a>
+    <a class="secondary-button" href="{{ url_for('group') }}">Netflix Party</a>
+  </div>
 </section>
 
-<section class="section-title">
-    <h2>Featured movies</h2>
-    <p>Movies ranked using a weighted score based on average rating and number of ratings.</p>
-</section>
+<!-- ── Mood Selector ─────────────────────────────────────── -->
+<div class="section-title" style="margin-top:0;">
+  <h2>What's your mood?</h2>
+  <p>Pick a mood to filter recommendations, or skip to browse all films.</p>
+</div>
 
-<section class="movie-grid">
-    {% for movie in featured_movies %}
-    <article class="movie-card">
-        <h3>{{ movie.title }}</h3>
-        <p class="genres">{{ movie.genres }}</p>
+<div class="mood-grid" id="mood-grid">
+  <button class="mood-btn" data-genres="Action|Adventure|Thriller" onclick="selectMood(this)">
+    <span class="mood-icon">⚡</span>
+    <span class="mood-label">Action</span>
+    <span class="mood-desc">Thrills & adrenaline</span>
+  </button>
+  <button class="mood-btn" data-genres="Comedy|Romance" onclick="selectMood(this)">
+    <span class="mood-icon">😂</span>
+    <span class="mood-label">Feel Good</span>
+    <span class="mood-desc">Light & fun</span>
+  </button>
+  <button class="mood-btn" data-genres="Drama" onclick="selectMood(this)">
+    <span class="mood-icon">🎭</span>
+    <span class="mood-label">Drama</span>
+    <span class="mood-desc">Deep & emotional</span>
+  </button>
+  <button class="mood-btn" data-genres="Horror|Mystery|Thriller" onclick="selectMood(this)">
+    <span class="mood-icon">😱</span>
+    <span class="mood-label">Dark</span>
+    <span class="mood-desc">Suspense & chills</span>
+  </button>
+  <button class="mood-btn" data-genres="Sci-Fi|Fantasy|Animation" onclick="selectMood(this)">
+    <span class="mood-icon">🚀</span>
+    <span class="mood-label">Escape</span>
+    <span class="mood-desc">Other worlds</span>
+  </button>
+  <button class="mood-btn" data-genres="Documentary|History|Biography" onclick="selectMood(this)">
+    <span class="mood-icon">🎓</span>
+    <span class="mood-label">Learn</span>
+    <span class="mood-desc">True stories</span>
+  </button>
+  <button class="mood-btn mood-skip" data-genres="" onclick="selectMood(this)">
+    <span class="mood-icon">🎲</span>
+    <span class="mood-label">Surprise me</span>
+    <span class="mood-desc">No preference</span>
+  </button>
+  <button class="mood-btn mood-skip" data-genres="" onclick="skipMood(this)">
+    <span class="mood-icon">⏭</span>
+    <span class="mood-label">Skip</span>
+    <span class="mood-desc">Show everything</span>
+  </button>
+</div>
 
-        <div class="metrics-row">
-            <div>
-                <span>Rating</span>
-                <strong>{{ "%.2f"|format(movie.mean) }}</strong>
-            </div>
+<!-- ── Search + Genre filters ────────────────────────────── -->
+<div class="section-title">
+  <h2>Featured this week</h2>
+  <p>Ranked by Bayesian weighted score.</p>
+</div>
 
-            <div>
-                <span>Votes</span>
-                <strong>{{ movie["count"] }}</strong>
-            </div>
-
-            <div>
-                <span>Score</span>
-                <strong>{{ "%.2f"|format(movie.featured_score) }}</strong>
-            </div>
-        </div>
-    </article>
+<div class="search-filter-bar">
+  <div class="search-box">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="movie-search-home" placeholder="Search a movie title..."
+           oninput="filterMovies()">
+  </div>
+  <div class="genre-filters" id="genre-filters">
+    {% for genre in genres %}
+    <button class="genre-btn" data-genre="{{ genre }}" onclick="toggleGenre(this)">{{ genre }}</button>
     {% endfor %}
+  </div>
+</div>
+
+<div id="no-results" style="display:none;" class="empty-state">
+  <div class="icon">🎬</div>
+  <p>No movies match your search. Try a different title or genre.</p>
+</div>
+
+<!-- ── Movie Grid ─────────────────────────────────────────── -->
+<section class="movie-grid" id="movie-grid">
+  {% for movie in featured_movies %}
+  <article class="movie-card"
+           data-title="{{ movie.title | lower }}"
+           data-genres="{{ movie.genres }}">
+    <div class="movie-poster-placeholder">🎬</div>
+    <div class="movie-card-body">
+      <h3>{{ movie.title }}</h3>
+      <p class="genres">{{ movie.genres }}</p>
+      <div class="metrics-row">
+        <div>
+          <span>Rating</span>
+          <strong>{{ "%.2f"|format(movie.rating_mean) }}</strong>
+        </div>
+        <div>
+          <span>Votes</span>
+          <strong>{{ movie.rating_count }}</strong>
+        </div>
+        <div>
+          <span>Score</span>
+          <strong>{{ "%.2f"|format(movie.weighted_score) }}</strong>
+        </div>
+      </div>
+    </div>
+  </article>
+  {% endfor %}
 </section>
+
+<!-- ── Surprise Me ────────────────────────────────────────── -->
+<div style="text-align:center; margin-top:48px; padding:40px 0;
+            border-top:1px solid var(--border-dark);">
+  <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;font-weight:300;">
+    Not sure what to watch? Let us decide for you.
+  </p>
+  <button class="primary-button" onclick="surpriseMe()" id="surprise-btn">
+    🎲 Surprise me
+  </button>
+  <div id="surprise-result" style="display:none; margin-top:28px; max-width:500px; margin-left:auto; margin-right:auto;">
+  </div>
+</div>
+
+<!-- ── Styles ─────────────────────────────────────────────── -->
+<style>
+.mood-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.mood-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 18px 14px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.18s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.mood-btn:hover {
+  border-color: var(--border-dark);
+  background: var(--bg-elevated);
+}
+
+.mood-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.mood-btn.active .mood-label,
+.mood-btn.active .mood-desc { color: var(--bg) !important; }
+
+.mood-btn.mood-skip { border-style: dashed; }
+.mood-btn.mood-skip.active { background: var(--bg-elevated); border-color: var(--border-dark); border-style: solid; }
+.mood-btn.mood-skip.active .mood-label { color: var(--text) !important; }
+.mood-btn.mood-skip.active .mood-desc  { color: var(--text-muted) !important; }
+
+.mood-icon  { font-size: 1.6rem; line-height: 1; }
+.mood-label { font-size: 0.82rem; font-weight: 500; color: var(--text); }
+.mood-desc  { font-size: 0.7rem; color: var(--text-muted); font-weight: 300; }
+
+.search-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-dark);
+  padding: 10px 16px;
+  max-width: 400px;
+}
+
+.search-icon { font-size: 0.9rem; color: var(--text-muted); }
+
+.search-box input {
+  background: none;
+  border: none;
+  outline: none;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.88rem;
+  color: var(--text);
+  width: 100%;
+}
+
+.search-box input::placeholder { color: var(--text-dim); }
+
+.genre-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.genre-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 4px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.3px;
+}
+
+.genre-btn:hover { border-color: var(--border-dark); color: var(--text); }
+
+.genre-btn.active {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+.surprise-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-dark);
+  padding: 22px 24px;
+  text-align: left;
+}
+
+.surprise-card h3 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.1rem;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.surprise-card .genres {
+  margin-bottom: 12px;
+}
+
+.surprise-card .metrics-row {
+  margin-bottom: 14px;
+}
+
+.surprise-again {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+</style>
+
+<!-- ── JS ─────────────────────────────────────────────────── -->
+<script>
+const ALL_FEATURED = {{ featured_movies | tojson | safe }};
+let activeMoodGenres  = null;
+let activeGenreFilters = new Set();
+
+function selectMood(btn) {
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeMoodGenres = btn.dataset.genres || null;
+  filterMovies();
+}
+
+function skipMood(btn) {
+  // Réinitialise tout — mood, genres, recherche
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.genre-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeMoodGenres  = null;
+  activeGenreFilters = new Set();
+  document.getElementById('movie-search-home').value = '';
+  filterMovies();
+}
+
+function toggleGenre(btn) {
+  const g = btn.dataset.genre;
+  if (activeGenreFilters.has(g)) {
+    activeGenreFilters.delete(g);
+    btn.classList.remove('active');
+  } else {
+    activeGenreFilters.add(g);
+    btn.classList.add('active');
+  }
+  filterMovies();
+}
+
+function filterMovies() {
+  const query   = (document.getElementById('movie-search-home').value || '').toLowerCase().trim();
+  const cards   = document.querySelectorAll('.movie-card');
+  let   visible = 0;
+
+  cards.forEach(card => {
+    const title  = card.dataset.title  || '';
+    const genres = card.dataset.genres || '';
+
+    // Text search
+    const matchText = !query || title.includes(query);
+
+    // Genre filter buttons
+    const matchGenreFilter = activeGenreFilters.size === 0 ||
+      [...activeGenreFilters].every(g => genres.includes(g));
+
+    // Mood filter
+    let matchMood = true;
+    if (activeMoodGenres) {
+      const moodList = activeMoodGenres.split('|');
+      matchMood = moodList.some(mg => genres.includes(mg));
+    }
+
+    const show = matchText && matchGenreFilter && matchMood;
+    card.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+
+  document.getElementById('no-results').style.display = visible === 0 ? '' : 'none';
+}
+
+function surpriseMe() {
+  const btn = document.getElementById('surprise-btn');
+  btn.textContent = '⏳ Picking a movie...';
+  btn.disabled = true;
+
+  // Filtrer selon mood actif si applicable
+  let pool = ALL_FEATURED;
+  if (activeMoodGenres) {
+    const moodList = activeMoodGenres.split('|');
+    pool = pool.filter(m => moodList.some(mg => m.genres && m.genres.includes(mg)));
+  }
+  if (!pool.length) pool = ALL_FEATURED;
+
+  // Sélection aléatoire
+  const movie = pool[Math.floor(Math.random() * pool.length)];
+  const result = document.getElementById('surprise-result');
+
+  result.innerHTML = `
+    <div class="surprise-card">
+      <p style="font-size:0.72rem;font-weight:500;text-transform:uppercase;
+                letter-spacing:2px;color:var(--accent);margin-bottom:10px;">Tonight's pick</p>
+      <h3>${movie.title}</h3>
+      <p class="genres">${movie.genres}</p>
+      <div class="metrics-row">
+        <div><span>Rating</span><strong>${movie.rating_mean.toFixed(2)}</strong></div>
+        <div><span>Votes</span><strong>${movie.rating_count}</strong></div>
+        <div><span>Score</span><strong>${movie.weighted_score.toFixed(2)}</strong></div>
+      </div>
+      <button class="surprise-again" onclick="surpriseMe()">🎲 Pick another one</button>
+    </div>`;
+  result.style.display = 'block';
+
+  btn.textContent = '🎲 Surprise me';
+  btn.disabled = false;
+}
+</script>
+
 {% endblock %}

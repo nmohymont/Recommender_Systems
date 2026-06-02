@@ -1,16 +1,20 @@
 """
+models.py
+=========
+Tous les modèles de recommandation du projet MLSMM2156.
+
 Modèles implémentés
 -------------------
 1.  ModelBaselineMean       — Baseline : moyenne globale
-2.  UserBasedJaccardKNN     — User-based CF avec similarité Jaccard (custom,
-                              non disponible dans Surprise)
-3.  UserBasedKNN            — User-based CF avec Pearson Baseline (Surprise)
-4.  ItemBasedKNN            — Item-based CF avec Pearson Baseline (Surprise)
-5.  ContentBased            — Content-based par utilisateur :
-                              features riches (genres, tags TF-IDF, genome,
-                              visuels, stats rating) + Ridge par user
-6.  SVDModel                — Factorisation matricielle FunkSVD (Surprise)
+2.  UserBasedJaccardKNN     — User-based CF avec similarité Jaccard (custom)
+3.  UserBasedITRKNN         — User-based CF avec similarité ITR (custom)
+                              Triangle + User Rating Preferences (Fkih, 2021)
+4.  UserBasedKNN            — User-based CF avec Pearson Baseline (Surprise)
+5.  ItemBasedKNN            — Item-based CF avec Pearson Baseline (Surprise)
+6.  ContentBased            — Content-based Ridge par utilisateur (V1/V2/V3)
+7.  SVDModel                — Factorisation matricielle FunkSVD (Surprise)
 """
+
 from collections import defaultdict
 
 import numpy as np
@@ -139,7 +143,125 @@ class UserBasedJaccardKNN(AlgoBase):
 
 
 # ===========================================================================
-# 3. USER-BASED — KNNBaseline Pearson (Surprise)
+# 3. USER-BASED — ITR KNN (custom, absent de Surprise)
+# ===========================================================================
+
+class UserBasedITRKNN(AlgoBase):
+    """
+    KNN user-based avec similarité ITR (Improved Triangle + User Rating Preferences).
+
+    Référence : Fkih, F. (2021). Similarity Measures for Collaborative Filtering-based
+    Recommender Systems. Journal of King Saud University - Computer and Information
+    Sciences. https://doi.org/10.1016/j.jksuci.2021.09.014
+
+    Formule :
+        sim_ITR(u,v) = sim_TRIANGLE(u,v) × sim_URP(u,v)
+
+    sim_TRIANGLE(u,v) = 1 - sqrt(Σ(r_ui - r_vi)²) / (sqrt(Σr_ui²) + sqrt(Σr_vi²))
+        → mesure la distance entre les ratings sur les films communs
+
+    sim_URP(u,v) = 1 - 1 / (1 + exp(-|μ_u - μ_v| × |σ_u - σ_v|))
+        → pénalise les utilisateurs avec des habitudes de notation très différentes
+        → prend en compte les films NON communs via μ et σ
+
+    Avantage sur Jaccard : tient compte des valeurs des ratings (pas seulement
+    du fait qu'un film a été noté), et pénalise les biais de notation différents.
+
+    Paramètres
+    ----------
+    k     : nombre de voisins maximum
+    min_k : nombre minimum de voisins pour faire une prédiction
+    """
+
+    def __init__(self, k: int = 40, min_k: int = 3):
+        AlgoBase.__init__(self)
+        self.k     = k
+        self.min_k = min_k
+
+    def fit(self, trainset):
+        AlgoBase.fit(self, trainset)
+
+        self.user_means = {}
+        self.user_stds  = {}
+        self.user_ratings_dict = {}
+
+        for inner_uid in trainset.all_users():
+            ratings = trainset.ur[inner_uid]
+            vals    = [r for _, r in ratings]
+
+            self.user_means[inner_uid]        = np.mean(vals) if vals else trainset.global_mean
+            self.user_stds[inner_uid]         = np.std(vals)  if len(vals) > 1 else 0.0
+            self.user_ratings_dict[inner_uid] = {iid: r for iid, r in ratings}
+
+        return self
+
+    def itr_similarity(self, u: int, v: int) -> float:
+        """
+        Calcule la similarité ITR entre deux utilisateurs.
+        """
+        ratings_u = self.user_ratings_dict.get(u, {})
+        ratings_v = self.user_ratings_dict.get(v, {})
+
+        # Films communs
+        common = set(ratings_u.keys()) & set(ratings_v.keys())
+
+        if not common:
+            return 0.0
+
+        # --- sim_TRIANGLE ---
+        diff_sq   = sum((ratings_u[i] - ratings_v[i]) ** 2 for i in common)
+        norm_u    = np.sqrt(sum(ratings_u[i] ** 2 for i in common))
+        norm_v    = np.sqrt(sum(ratings_v[i] ** 2 for i in common))
+        denom_tri = norm_u + norm_v
+
+        if denom_tri == 0:
+            sim_triangle = 0.0
+        else:
+            sim_triangle = 1 - np.sqrt(diff_sq) / denom_tri
+
+        # --- sim_URP ---
+        mu_u  = self.user_means.get(u, self.trainset.global_mean)
+        mu_v  = self.user_means.get(v, self.trainset.global_mean)
+        std_u = self.user_stds.get(u, 0.0)
+        std_v = self.user_stds.get(v, 0.0)
+
+        exponent = -abs(mu_u - mu_v) * abs(std_u - std_v)
+        sim_urp  = 1 - 1 / (1 + np.exp(exponent))
+
+        return float(sim_triangle * sim_urp)
+
+    def estimate(self, u, i):
+        if not self.trainset.knows_user(u):
+            raise PredictionImpossible("Unknown user.")
+
+        neighbors = []
+        for v in self.trainset.all_users():
+            if v == u:
+                continue
+            if i not in self.user_ratings_dict.get(v, {}):
+                continue
+            sim = self.itr_similarity(u, v)
+            if sim > 0:
+                neighbors.append((sim, self.user_ratings_dict[v][i], self.user_means[v]))
+
+        neighbors.sort(key=lambda x: x[0], reverse=True)
+        neighbors = neighbors[: self.k]
+
+        if len(neighbors) < self.min_k:
+            return self.user_means.get(u, self.trainset.global_mean)
+
+        num = sum(s * (r - m) for s, r, m in neighbors)
+        den = sum(abs(s) for s, _, _ in neighbors)
+
+        if den == 0:
+            return self.user_means.get(u, self.trainset.global_mean)
+
+        pred = self.user_means.get(u, self.trainset.global_mean) + num / den
+        return float(np.clip(pred, C.RATINGS_SCALE[0], C.RATINGS_SCALE[1]))
+
+
+# ===========================================================================
+# 4. USER-BASED — KNNBaseline Pearson (Surprise)
 # ===========================================================================
 
 class UserBasedKNN(KNNBaseline):
@@ -161,14 +283,45 @@ class UserBasedKNN(KNNBaseline):
 
 
 # ===========================================================================
-# 4. ITEM-BASED — KNNBaseline Pearson (Surprise)
+# 4. ITEM-BASED
 # ===========================================================================
 
-class ItemBasedKNN(KNNBaseline):
+from surprise import KNNWithMeans
+
+class ItemBasedKNN(KNNWithMeans):
     """
-    KNN item-based avec similarité Pearson Baseline.
-    Paramètres optimaux : k=60, ALS (n_epochs=30, reg_u=10, reg_i=5).
-    RMSE obtenu sur le small dataset : 0.876 (meilleur KNN)
+    KNN item-based avec similarité Adjusted Cosine (référence pour l'item-based CF).
+
+    Adjusted Cosine
+    ---------------
+    Contrairement au cosine standard qui centre par la moyenne de l'ITEM,
+    l'Adjusted Cosine centre par la moyenne de l'UTILISATEUR :
+
+        sim(i,j) = cosine( (r_ui - μ_u), (r_uj - μ_u) )
+                   pour tous les users u qui ont noté i ET j
+
+    Cela corrige le biais utilisateur — un utilisateur qui note toujours 5/5
+    ne doit pas artificiellement rapprocher deux films.
+    C'est la métrique de référence pour l'item-based CF (Sarwar et al., 2001).
+    """
+
+    def __init__(self, k: int = 60, min_k: int = 3):
+        KNNWithMeans.__init__(
+            self,
+            k=k,
+            min_k=min_k,
+            sim_options={
+                "name":       "cosine",
+                "user_based": False    # item-based
+            },
+            verbose=False
+        )
+
+
+class ItemBasedPearsonKNN(KNNBaseline):
+    """
+    KNN item-based avec similarité Pearson Baseline (pour comparaison).
+    Utilisé pour justifier le choix de l'Adjusted Cosine dans le rapport.
     """
 
     def __init__(self, k: int = 60, min_k: int = 3):

@@ -1,78 +1,190 @@
 {% extends "base.html" %}
-
 {% block content %}
+
 <section class="page-header">
-    <p class="eyebrow">Individual recommendation</p>
-    <h1>Get your personalized top-N movie list.</h1>
-    <p>
-        Select a user profile and generate personalized movie recommendations
-        using the hybrid recommender system.
-    </p>
+  <span class="eyebrow">For You</span>
+  <h1>Your personalized<br>movie list.</h1>
+  <p>Select an existing user profile, or build your own by rating movies you've seen.</p>
 </section>
 
-<form method="POST" class="form-card">
+<div class="strategy-toggle" style="max-width:440px; margin-bottom:32px;">
+  <button class="strategy-btn {% if not new_user_mode %}active{% endif %}"
+          onclick="showTab('existing')">Existing user</button>
+  <button class="strategy-btn {% if new_user_mode %}active{% endif %}"
+          onclick="showTab('new')">New user profile</button>
+</div>
+
+<!-- Existing user -->
+<div id="tab-existing" {% if new_user_mode %}style="display:none"{% endif %}>
+  <form method="POST" class="form-card">
+    <input type="hidden" name="mode" value="existing">
     <div class="form-group">
-        <label>User profile</label>
-        <select name="user_id">
-            {% for user in users %}
-            <option value="{{ user }}" {% if selected_user == user %}selected{% endif %}>
-                User {{ user }}
-            </option>
+      <label>User profile</label>
+      <select name="user_id">
+        {% for user in users %}
+        <option value="{{ user }}" {% if selected_user == user|string %}selected{% endif %}>
+          {% if user == -1 %}My Profile (userId = -1){% else %}User {{ user }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="max-width:130px;">
+      <label>Top-N</label>
+      <input type="number" name="n_recommendations" min="5" max="20" value="10">
+    </div>
+    <button class="primary-button" type="submit">Generate</button>
+  </form>
+</div>
+
+<!-- New user -->
+<div id="tab-new" {% if not new_user_mode %}style="display:none"{% endif %}>
+  <div class="info-banner">
+    Rate at least 5 movies you've seen so the system can learn your preferences.
+  </div>
+  <form method="POST" class="form-card vertical-form">
+    <input type="hidden" name="mode" value="new_user">
+    <div class="form-group">
+      <label>Search and rate movies you've seen</label>
+      <input type="text" id="movie-search" placeholder="Type a movie title..." autocomplete="off">
+    </div>
+    <div id="search-results" style="display:none; background:var(--bg-card);
+         border:1px solid var(--border-dark); margin-top:-12px;
+         max-height:200px; overflow-y:auto;"></div>
+    <div id="rated-movies" style="display:flex; flex-direction:column; gap:7px; margin-top:4px;">
+      {% if rated_movies %}
+        {% for m in rated_movies %}
+        <div class="rated-row" data-id="{{ m.movieId }}"
+             style="display:flex;align-items:center;gap:12px;padding:9px 12px;
+                    background:var(--bg-elevated);border:1px solid var(--border);">
+          <span style="flex:1;font-size:0.86rem;">{{ m.title }}</span>
+          <div class="star-rating" data-id="{{ m.movieId }}" data-rating="{{ m.rating }}">
+            {% for i in range(1,6) %}
+            <span class="star {% if i <= m.rating %}filled{% endif %}" data-val="{{ i }}"
+                  style="cursor:pointer;font-size:1.2rem;color:{% if i <= m.rating %}var(--accent){% else %}var(--text-dim){% endif %};transition:0.15s;"
+                  onclick="setRating({{ m.movieId }}, {{ i }})">★</span>
             {% endfor %}
-        </select>
+          </div>
+          <input type="hidden" name="movie_{{ m.movieId }}" value="{{ m.rating }}">
+          <button type="button" onclick="removeMovie({{ m.movieId }})"
+                  style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.9rem;">✕</button>
+        </div>
+        {% endfor %}
+      {% endif %}
     </div>
-
-    <div class="form-group">
-        <label>Number of recommendations</label>
-        <input type="number" name="n_recommendations" min="5" max="20" value="10">
+    <div class="form-group" style="max-width:130px;">
+      <label>Top-N</label>
+      <input type="number" name="n_recommendations" min="5" max="20" value="10">
     </div>
+    <button class="primary-button" type="submit">Get my recommendations</button>
+  </form>
+</div>
 
-    <button class="primary-button" type="submit">
-        Generate recommendations
-    </button>
-</form>
-
+<!-- Results -->
 {% if recommendations %}
-<section class="section-title">
-    <h2>Recommended movies</h2>
-    <p>
-        Each recommendation includes the final hybrid score, the individual model scores,
-        and an explanation for the end user.
-    </p>
-</section>
-
-{% for movie in recommendations %}
-<article class="recommendation-card">
+<div class="section-title">
+  <h2>Recommended for you</h2>
+  <p>Hybrid score: SVD (50%) · Item-based KNN (50%)</p>
+</div>
+<div class="recommendations-list">
+  {% for movie in recommendations %}
+  <article class="recommendation-card">
     <div class="recommendation-header">
-        <h3>{{ loop.index }}. {{ movie.title }}</h3>
-        <span class="score-pill">Final {{ movie.final_score }}</span>
+      <h3>{{ loop.index }}. {{ movie.title }}</h3>
+      <span class="score-pill">{{ movie.final_score }}</span>
     </div>
-
     <p class="genres">{{ movie.genres }}</p>
-
-    <div class="score-grid three">
-        <div>
-            <span>SVD</span>
-            <strong>{{ movie.svd_score }}</strong>
-        </div>
-
-        <div>
-            <span>User-based</span>
-            <strong>{{ movie.user_based_score }}</strong>
-        </div>
-
-        <div>
-            <span>Content-based</span>
-            <strong>{{ movie.content_based_score }}</strong>
-        </div>
+    <div class="score-grid two">
+      <div><span>SVD</span><strong>{{ movie.svd_score }}</strong></div>
+      <div><span>Item-based</span><strong>{{ movie.item_score }}</strong></div>
     </div>
-
     <div class="explanation-box">
-        <strong>Why this movie?</strong>
-        <p>{{ movie.explanation }}</p>
+      <strong>Why this movie?</strong>
+      <p>{{ movie.explanation }}</p>
     </div>
-</article>
-{% endfor %}
+  </article>
+  {% endfor %}
+</div>
+{% elif request.method == 'POST' %}
+<div class="empty-state">
+  <div class="icon">🎬</div>
+  <p>No recommendations found. Try selecting a different user or rating more movies.</p>
+</div>
 {% endif %}
+
+<script>
+const ALL_MOVIES = {{ all_movies | tojson | safe }};
+
+function showTab(tab) {
+  document.getElementById('tab-existing').style.display = tab === 'existing' ? '' : 'none';
+  document.getElementById('tab-new').style.display      = tab === 'new'      ? '' : 'none';
+  document.querySelectorAll('.strategy-btn').forEach((b, i) => {
+    b.classList.toggle('active', (tab === 'existing' && i === 0) || (tab === 'new' && i === 1));
+  });
+}
+
+const searchInput  = document.getElementById('movie-search');
+const searchResult = document.getElementById('search-results');
+const ratedDiv     = document.getElementById('rated-movies');
+const addedIds     = new Set([...document.querySelectorAll('.rated-row')].map(r => r.dataset.id));
+
+searchInput && searchInput.addEventListener('input', function() {
+  const q = this.value.toLowerCase().trim();
+  if (q.length < 2) { searchResult.style.display='none'; return; }
+  const matches = ALL_MOVIES.filter(m => m.title.toLowerCase().includes(q)).slice(0, 8);
+  if (!matches.length) { searchResult.style.display='none'; return; }
+  searchResult.innerHTML = matches.map(m => `
+    <div onclick="addMovie(${m.movieId}, '${m.title.replace(/'/g,"\\'")}')"
+         style="padding:9px 14px;cursor:pointer;font-size:0.85rem;
+                border-bottom:1px solid var(--border);transition:0.12s;"
+         onmouseover="this.style.background='var(--bg-elevated)'"
+         onmouseout="this.style.background=''">
+      ${m.title}
+    </div>`).join('');
+  searchResult.style.display = 'block';
+});
+
+document.addEventListener('click', e => {
+  if (!searchResult.contains(e.target) && e.target !== searchInput)
+    searchResult.style.display = 'none';
+});
+
+function addMovie(id, title) {
+  if (addedIds.has(String(id))) { searchResult.style.display='none'; searchInput.value=''; return; }
+  addedIds.add(String(id));
+  const row = document.createElement('div');
+  row.className = 'rated-row';
+  row.dataset.id = id;
+  row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:9px 12px;background:var(--bg-elevated);border:1px solid var(--border);';
+  row.innerHTML = `
+    <span style="flex:1;font-size:0.86rem;">${title}</span>
+    <div class="star-rating" data-id="${id}" data-rating="3">
+      ${[1,2,3,4,5].map(i =>
+        `<span style="cursor:pointer;font-size:1.2rem;color:${i<=3?'var(--accent)':'var(--text-dim)'};transition:0.15s;"
+               onclick="setRating(${id},${i})">★</span>`
+      ).join('')}
+    </div>
+    <input type="hidden" name="movie_${id}" value="3">
+    <button type="button" onclick="removeMovie(${id})"
+            style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.9rem;">✕</button>`;
+  ratedDiv.appendChild(row);
+  searchInput.value = '';
+  searchResult.style.display = 'none';
+}
+
+function setRating(movieId, val) {
+  const container = document.querySelector(`.star-rating[data-id="${movieId}"]`);
+  if (!container) return;
+  container.querySelectorAll('span').forEach((s, i) => {
+    s.style.color = i < val ? 'var(--accent)' : 'var(--text-dim)';
+  });
+  const inp = document.querySelector(`input[name="movie_${movieId}"]`);
+  if (inp) inp.value = val;
+}
+
+function removeMovie(id) {
+  document.querySelector(`.rated-row[data-id="${id}"]`)?.remove();
+  addedIds.delete(String(id));
+}
+</script>
 
 {% endblock %}

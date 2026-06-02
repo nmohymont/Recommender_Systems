@@ -1,73 +1,298 @@
 {% extends "base.html" %}
-
 {% block content %}
+
 <section class="page-header">
-    <p class="eyebrow">Group recommendation</p>
-    <h1>Find a movie everyone can enjoy.</h1>
-    <p>
-        Select several users and optionally add movies the group already wants to watch.
-        The group score combines average satisfaction and least misery.
-    </p>
+  <span class="eyebrow">Netflix Party</span>
+  <h1>Find a movie<br><em>everyone</em> will enjoy.</h1>
+  <p>Each participant picks movies they loved or want to see. The system finds the best match for the whole group.</p>
 </section>
 
-<form method="POST" class="form-card vertical-form">
-    <div class="form-group">
-        <label>Group members</label>
-        <select name="group_users" multiple size="8">
-            {% for user in users %}
-            <option value="{{ user }}">User {{ user }}</option>
+<form method="POST" id="party-form">
+
+  <div class="section-title" style="margin-top:0;">
+    <h2>Participants</h2>
+    <p>Add each person and pick up to 5 movies per category.</p>
+  </div>
+
+  <div class="party-participants" id="participants-list">
+    {% if participants %}
+      {% for p in participants %}
+      {% set pidx = loop.index0 %}
+      <div class="participant-row" id="participant-{{ pidx }}">
+        <div class="participant-name">
+          <div class="participant-avatar">{{ p.name[0]|upper }}</div>
+          <input type="text" name="participant_name_{{ pidx }}" value="{{ p.name }}" placeholder="Name"
+                 style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
+                        padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.88rem;outline:none;width:200px;">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <h4 style="font-size:0.72rem;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin:0;">Movies they loved</h4>
+          <span class="counter-badge" id="counter-{{ pidx }}-liked">{{ p.liked|length }}/5</span>
+        </div>
+        <div class="search-container" data-participant="{{ pidx }}" data-type="liked">
+          <input type="text" class="movie-search-input" placeholder="Search a movie..."
+                 style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
+                        padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;
+                        width:100%;margin-bottom:7px;">
+          <div class="search-dropdown" style="display:none;background:var(--bg-card);border:1px solid var(--border-dark);
+               max-height:180px;overflow-y:auto;margin-top:-6px;margin-bottom:8px;"></div>
+          <div class="picked-movies">
+            {% for m in p.liked %}
+            <div class="picked-tag" data-id="{{ m.id }}">{{ m.title }}
+              <input type="hidden" name="p{{ pidx }}_liked" value="{{ m.id }}">
+              <button type="button" onclick="this.parentElement.remove();updateCounter('{{ pidx }}','liked')">✕</button>
+            </div>
             {% endfor %}
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label>Wish-list movies</label>
-        <select name="selected_movies" multiple size="8">
-            {% for movie in movies %}
-            <option value="{{ movie.movieId }}">{{ movie.display }}</option>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:8px;">
+          <h4 style="font-size:0.72rem;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin:0;">Movies they want to see</h4>
+          <span class="counter-badge" id="counter-{{ pidx }}-wishlist">{{ p.wishlist|length }}/5</span>
+        </div>
+        <div class="search-container" data-participant="{{ pidx }}" data-type="wishlist">
+          <input type="text" class="movie-search-input" placeholder="Search a movie..."
+                 style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
+                        padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;
+                        width:100%;margin-bottom:7px;">
+          <div class="search-dropdown" style="display:none;background:var(--bg-card);border:1px solid var(--border-dark);
+               max-height:180px;overflow-y:auto;margin-top:-6px;margin-bottom:8px;"></div>
+          <div class="picked-movies">
+            {% for m in p.wishlist %}
+            <div class="picked-tag" data-id="{{ m.id }}">{{ m.title }}
+              <input type="hidden" name="p{{ pidx }}_wishlist" value="{{ m.id }}">
+              <button type="button" onclick="this.parentElement.remove();updateCounter('{{ pidx }}','wishlist')">✕</button>
+            </div>
             {% endfor %}
-        </select>
-    </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      {% for idx in range(2) %}
+      <div class="participant-row" id="participant-{{ idx }}">
+        <div class="participant-name">
+          <div class="participant-avatar" id="avatar-{{ idx }}">?</div>
+          <input type="text" name="participant_name_{{ idx }}" placeholder="Name"
+                 oninput="updateAvatar({{ idx }}, this.value)"
+                 style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
+                        padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.88rem;outline:none;width:200px;">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <h4 style="font-size:0.72rem;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin:0;">Movies they loved</h4>
+          <span class="counter-badge" id="counter-{{ idx }}-liked">0/5</span>
+        </div>
+        <div class="search-container" data-participant="{{ idx }}" data-type="liked">
+          <input type="text" class="movie-search-input" placeholder="Search a movie..."
+                 style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
+                        padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;
+                        width:100%;margin-bottom:7px;">
+          <div class="search-dropdown" style="display:none;background:var(--bg-card);border:1px solid var(--border-dark);
+               max-height:180px;overflow-y:auto;margin-top:-6px;margin-bottom:8px;"></div>
+          <div class="picked-movies"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:8px;">
+          <h4 style="font-size:0.72rem;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin:0;">Movies they want to see</h4>
+          <span class="counter-badge" id="counter-{{ idx }}-wishlist">0/5</span>
+        </div>
+        <div class="search-container" data-participant="{{ idx }}" data-type="wishlist">
+          <input type="text" class="movie-search-input" placeholder="Search a movie..."
+                 style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
+                        padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;
+                        width:100%;margin-bottom:7px;">
+          <div class="search-dropdown" style="display:none;background:var(--bg-card);border:1px solid var(--border-dark);
+               max-height:180px;overflow-y:auto;margin-top:-6px;margin-bottom:8px;"></div>
+          <div class="picked-movies"></div>
+        </div>
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
 
+  <button type="button" class="add-participant-btn" onclick="addParticipant()">+ Add participant</button>
+
+  <div class="section-title"><h2>Options</h2></div>
+
+  <div class="form-card" style="margin-bottom:24px;">
+    <div class="form-group" style="max-width:190px;">
+      <label>Recommendations</label>
+      <input type="number" name="n_recommendations" min="3" max="15" value="8">
+    </div>
     <div class="form-group">
-        <label>Number of recommendations</label>
-        <input type="number" name="n_recommendations" min="5" max="20" value="10">
+      <label>Strategy</label>
+      <div class="strategy-toggle" style="margin-bottom:0;">
+        <label class="strategy-btn {% if strategy != 'least_misery' %}active{% endif %}" style="cursor:pointer;">
+          <input type="radio" name="strategy" value="average"
+                 {% if strategy != 'least_misery' %}checked{% endif %} style="display:none;"
+                 onchange="this.closest('.strategy-toggle').querySelectorAll('.strategy-btn').forEach(b=>b.classList.remove('active'));this.parentElement.classList.add('active');">
+          Everyone happy
+        </label>
+        <label class="strategy-btn {% if strategy == 'least_misery' %}active{% endif %}" style="cursor:pointer;">
+          <input type="radio" name="strategy" value="least_misery"
+                 {% if strategy == 'least_misery' %}checked{% endif %} style="display:none;"
+                 onchange="this.closest('.strategy-toggle').querySelectorAll('.strategy-btn').forEach(b=>b.classList.remove('active'));this.parentElement.classList.add('active');">
+          No one disappointed
+        </label>
+      </div>
+      <p style="font-size:0.73rem;color:var(--text-dim);margin-top:6px;font-weight:300;">
+        "Everyone happy" maximises average satisfaction.
+        "No one disappointed" ensures no one gets a movie they would hate.
+      </p>
     </div>
+    <input type="hidden" name="n_participants" id="n_participants" value="{{ n_participants | default(2) }}">
+    <button class="primary-button" type="submit">Find our movie</button>
+  </div>
 
-    <button class="primary-button" type="submit">Find group movie</button>
 </form>
 
 {% if group_recommendations %}
-<section class="section-title">
-    <h2>Best movies for the group</h2>
-</section>
-
-{% for movie in group_recommendations %}
-<article class="recommendation-card">
+<div class="section-title">
+  <h2>Best movies for the group</h2>
+  <p>Strategy: <strong>{{ "Everyone happy" if strategy != "least_misery" else "No one disappointed" }}</strong></p>
+</div>
+<div class="recommendations-list">
+  {% for movie in group_recommendations %}
+  <article class="recommendation-card">
     <div class="recommendation-header">
-        <h3>{{ loop.index }}. {{ movie.title }}</h3>
-        <span class="score-pill">Group {{ movie.group_score }}</span>
+      <h3>{{ loop.index }}. {{ movie.title }}</h3>
+      <span class="score-pill gold">{{ movie.group_score }}</span>
     </div>
-
     <p class="genres">{{ movie.genres }}</p>
-
-    <div class="score-grid three">
-        <div>
-            <span>Average</span>
-            <strong>{{ movie.average_score }}</strong>
-        </div>
-
-        <div>
-            <span>Least misery</span>
-            <strong>{{ movie.least_misery_score }}</strong>
-        </div>
-
-        <div>
-            <span>Group score</span>
-            <strong>{{ movie.group_score }}</strong>
-        </div>
+    <div class="score-grid two">
+      <div><span>Group score</span><strong>{{ movie.group_score }}</strong></div>
+      <div><span>Users matched</span><strong>{{ movie.n_users }}</strong></div>
     </div>
-</article>
-{% endfor %}
+  </article>
+  {% endfor %}
+</div>
+{% elif request.method == 'POST' %}
+<div class="empty-state">
+  <div class="icon">🎬</div>
+  <p>No recommendations found. Make sure each participant has picked at least one movie.</p>
+</div>
 {% endif %}
+
+<script>
+const ALL_MOVIES     = {{ all_movies | tojson | safe }};
+let participantCount = {{ n_participants | default(2) }};
+
+function updateAvatar(idx, val) {
+  const av = document.getElementById('avatar-' + idx);
+  if (av) av.textContent = val ? val[0].toUpperCase() : '?';
+}
+
+function updateCounter(pIdx, pType) {
+  const sc    = document.querySelector(`.search-container[data-participant="${pIdx}"][data-type="${pType}"]`);
+  const count = sc ? sc.querySelectorAll('.picked-tag').length : 0;
+  const badge = document.getElementById(`counter-${pIdx}-${pType}`);
+  if (!badge) return;
+  badge.textContent = count + '/5';
+  badge.className   = 'counter-badge' + (count >= 5 ? ' full' : count > 0 ? ' has-items' : '');
+}
+
+document.querySelectorAll('.search-container').forEach(sc => {
+  updateCounter(sc.dataset.participant, sc.dataset.type);
+});
+
+function addParticipant() {
+  const idx = participantCount++;
+  document.getElementById('n_participants').value = participantCount;
+  const div = document.createElement('div');
+  div.className = 'participant-row';
+  div.id = 'participant-' + idx;
+  div.innerHTML = `
+    <div class="participant-name">
+      <div class="participant-avatar" id="avatar-${idx}">?</div>
+      <input type="text" name="participant_name_${idx}" placeholder="Name"
+             oninput="updateAvatar(${idx}, this.value)"
+             style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
+                    padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.88rem;outline:none;width:200px;">
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <h4 style="font-size:0.72rem;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin:0;">Movies they loved</h4>
+      <span class="counter-badge" id="counter-${idx}-liked">0/5</span>
+    </div>
+    <div class="search-container" data-participant="${idx}" data-type="liked">
+      <input type="text" class="movie-search-input" placeholder="Search a movie..."
+             style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
+                    padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;
+                    width:100%;margin-bottom:7px;">
+      <div class="search-dropdown" style="display:none;background:var(--bg-card);border:1px solid var(--border-dark);
+           max-height:180px;overflow-y:auto;margin-top:-6px;margin-bottom:8px;"></div>
+      <div class="picked-movies"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:8px;">
+      <h4 style="font-size:0.72rem;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin:0;">Movies they want to see</h4>
+      <span class="counter-badge" id="counter-${idx}-wishlist">0/5</span>
+    </div>
+    <div class="search-container" data-participant="${idx}" data-type="wishlist">
+      <input type="text" class="movie-search-input" placeholder="Search a movie..."
+             style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
+                    padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;
+                    width:100%;margin-bottom:7px;">
+      <div class="search-dropdown" style="display:none;background:var(--bg-card);border:1px solid var(--border-dark);
+           max-height:180px;overflow-y:auto;margin-top:-6px;margin-bottom:8px;"></div>
+      <div class="picked-movies"></div>
+    </div>`;
+  document.getElementById('participants-list').appendChild(div);
+  initSearch(div);
+}
+
+function initSearch(container) {
+  container.querySelectorAll('.search-container').forEach(sc => {
+    const input    = sc.querySelector('.movie-search-input');
+    const dropdown = sc.querySelector('.search-dropdown');
+    const pIdx     = sc.dataset.participant;
+    const pType    = sc.dataset.type;
+
+    input.addEventListener('input', function() {
+      const q = this.value.toLowerCase().trim();
+      if (q.length < 2) { dropdown.style.display='none'; return; }
+      const matches = ALL_MOVIES.filter(m => m.title.toLowerCase().includes(q)).slice(0, 7);
+      if (!matches.length) { dropdown.style.display='none'; return; }
+      dropdown.innerHTML = matches.map(m => `
+        <div onclick="pickMovie(${m.movieId},'${m.title.replace(/'/g,"\\'")}','${pIdx}','${pType}')"
+             style="padding:9px 14px;cursor:pointer;font-size:0.83rem;
+                    border-bottom:1px solid var(--border);transition:0.12s;"
+             onmouseover="this.style.background='var(--bg-elevated)'"
+             onmouseout="this.style.background=''">
+          ${m.title}
+        </div>`).join('');
+      dropdown.style.display = 'block';
+    });
+
+    document.addEventListener('click', e => {
+      if (!dropdown.contains(e.target) && e.target !== input)
+        dropdown.style.display = 'none';
+    });
+  });
+}
+
+function pickMovie(id, title, pIdx, pType) {
+  const sc      = document.querySelector(`.search-container[data-participant="${pIdx}"][data-type="${pType}"]`);
+  const picked  = sc.querySelector('.picked-movies');
+  const dropdown= sc.querySelector('.search-dropdown');
+  const input   = sc.querySelector('.movie-search-input');
+
+  if ([...picked.querySelectorAll('.picked-tag')].some(t => t.dataset.id == id)) {
+    dropdown.style.display='none'; input.value=''; return;
+  }
+  if (picked.querySelectorAll('.picked-tag').length >= 5) {
+    alert('Maximum 5 movies per category.'); return;
+  }
+
+  const tag = document.createElement('div');
+  tag.className = 'picked-tag';
+  tag.dataset.id = id;
+  tag.innerHTML = `${title}
+    <input type="hidden" name="p${pIdx}_${pType}" value="${id}">
+    <button type="button" onclick="this.parentElement.remove();updateCounter('${pIdx}','${pType}')">✕</button>`;
+  picked.appendChild(tag);
+  updateCounter(pIdx, pType);
+  dropdown.style.display='none';
+  input.value='';
+}
+
+document.querySelectorAll('.participant-row').forEach(initSearch);
+</script>
+
 {% endblock %}

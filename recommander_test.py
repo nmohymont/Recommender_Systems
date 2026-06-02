@@ -1,156 +1,75 @@
 """
-recommender.py
-==============
-Composant de recommandation hybride du projet MLSMM2156.
+recommander_test.py
+===================
+Composant de recommandation hybride — version app.
 
-Stratégie : Weighted Ensemble (cf. Practical Recommender Systems, ch. 12.4)
----------------------------------------------------------------------------
-Chaque modèle produit un score prédit pour chaque film non vu par l'utilisateur.
-Le score final est une combinaison linéaire pondérée de ces scores :
+Modèles utilisés (rapides, performants) :
+    - SVDModel       RMSE 0.887  poids 0.50
+    - ItemBasedKNN   RMSE 0.876  poids 0.50
 
-    score_final(u, i) = w_svd        * score_svd(u, i)
-                      + w_user       * score_user_based(u, i)
-                      + w_item       * score_item_based(u, i)
-                      + w_content    * score_content_based(u, i)
+Le ContentBased V3 (RMSE 0.894) est évalué offline (evaluator.py)
+mais n'est pas chargé dans l'app car trop lent au démarrage (~15 min).
 
-Les poids sont définis dans constants.py et peuvent être ajustés.
-Ils ont été choisis en donnant plus de poids aux modèles ayant le meilleur
-RMSE (SVD et item-based) et moins au content-based (différent des autres).
-
-Modèles utilisés
-----------------
-- SVDModel          (latent factor)      — poids le plus élevé
-- UserBasedKNN      (user-based CF)      — poids moyen
-- ItemBasedKNN      (item-based CF)      — poids moyen
-- ContentBased V3   (content-based)      — poids plus faible mais apporte
-                                           diversité et cold-start
-
-Fonctionnalités
----------------
-- recommend(user_id, n)   : top-N recommandations hybrides
-- explain(user_id, movie_id) : explication lisible pour l'utilisateur
-- get_seen_movies(user_id)   : films déjà vus (exclus des reco)
-- group_recommend(user_ids, n) : recommandations pour un groupe
-
-Usage
------
-    from recommender import HybridRecommender
-
-    rec = HybridRecommender(use_implicit=True)
-    rec.fit()
-
-    recs = rec.recommend(user_id=-1, n=10)
-    print(recs)
-
-    explanation = rec.explain(-1, movie_id=1)
-    print(explanation)
+Démarrage app : ~60 secondes.
 """
 
+import pickle
 import pandas as pd
 import numpy as np
 
-from surprise import Dataset, Reader, KNNBaseline
+from surprise import Dataset, Reader
 
 from constants import Constant as C
 from loaders import load_movies, load_ratings
-from models_test import (
-    UserBasedKNN,
-    ItemBasedKNN,
-    ContentBased,
-    SVDModel,
-)
+from models_test import SVDModel, ItemBasedKNN, ContentBased
 
 
-# ===========================================================================
-# Poids du hybrid (définis dans constants.py, modifiables)
-# ===========================================================================
-#
-# Justification des poids :
-#   - SVD          (0.40) : meilleure généralisation, capture les patterns latents
-#   - User-based   (0.25) : apporte la dimension "voisinage utilisateur"
-#   - Item-based   (0.25) : meilleur RMSE des KNN, similitudes entre films
-#   - Content-based(0.10) : diversité et recommandations cold-start (user -1)
-#
-# Note : les poids sommant à 1, le score final est dans la même échelle
-#        que les ratings originaux (0.5 - 5.0).
+# Poids du hybrid
+W_SVD  = 0.50
+W_ITEM = 0.50
 
-WEIGHTS = {
-    "svd":          getattr(C, "HYBRID_SVD_WEIGHT",          0.40),
-    "user_based":   getattr(C, "HYBRID_USER_BASED_WEIGHT",   0.25),
-    "item_based":   getattr(C, "HYBRID_ITEM_BASED_WEIGHT",   0.25),
-    "content_based":getattr(C, "HYBRID_CONTENT_BASED_WEIGHT",0.10),
-}
-
-
-# ===========================================================================
-# HybridRecommender
-# ===========================================================================
 
 class HybridRecommender:
     """
-    Recommandeur hybride par weighted ensemble.
+    Recommandeur hybride SVD + ItemBased.
 
     Paramètres
     ----------
     use_implicit : bool
-        Si True, charge les ratings avec le profil implicite (userId=-1).
-        Si False, charge uniquement les ratings MovieLens originaux.
-    features_method : str
-        Méthode de features pour ContentBased ("V3" recommandé).
-    alpha : float
-        Régularisation Ridge pour ContentBased (24 = optimal hackathon).
+        Si True, charge ratings_with_implicit_ilies.csv (inclut userId=-1).
     """
 
-    def __init__(
-        self,
-        use_implicit:    bool  = True,
-        features_method: str   = "V3",
-        alpha:           float = 24.0
-    ):
-        self.use_implicit    = use_implicit
-        self.features_method = features_method
-        self.alpha           = alpha
-
-        self.trainset      = None
-        self.svd           = None
-        self.user_based    = None
-        self.item_based    = None
-        self.content_based = None
-        self._is_fitted    = False
+    def __init__(self, use_implicit: bool = True):
+        self.use_implicit = use_implicit
+        self.trainset     = None
+        self.svd          = None
+        self.item_based   = None
+        self._is_fitted   = False
 
     # ------------------------------------------------------------------
     # Fit
     # ------------------------------------------------------------------
 
     def fit(self):
-        """
-        Entraîne tous les modèles sur le trainset complet.
-        À appeler une fois au démarrage de l'app (offline).
-        """
+        """Entraîne les modèles sur le trainset complet."""
         print("Building trainset...")
         self.trainset = self._build_trainset()
+        print(f"  {self.trainset.n_users} users | "
+              f"{self.trainset.n_items} items | "
+              f"{self.trainset.n_ratings} ratings")
 
         print("Training SVD...")
         self.svd = SVDModel()
         self.svd.fit(self.trainset)
-
-        print("Training UserBasedKNN...")
-        self.user_based = UserBasedKNN()
-        self.user_based.fit(self.trainset)
+        print("  ✓ SVD ready")
 
         print("Training ItemBasedKNN...")
         self.item_based = ItemBasedKNN()
         self.item_based.fit(self.trainset)
-
-        print(f"Training ContentBased ({self.features_method})...")
-        self.content_based = ContentBased(
-            features_method=self.features_method,
-            alpha=self.alpha
-        )
-        self.content_based.fit(self.trainset)
+        print("  ✓ ItemBasedKNN ready")
 
         self._is_fitted = True
-        print("All models trained successfully.")
+        print("Hybrid recommender ready.")
         return self
 
     def _build_trainset(self):
@@ -163,170 +82,243 @@ class HybridRecommender:
         return data.build_full_trainset()
 
     # ------------------------------------------------------------------
-    # Prédiction safe
+    # Helpers
     # ------------------------------------------------------------------
 
-    def _safe_predict(self, model, user_id, movie_id, default=3.0) -> float:
-        """
-        Prédit un rating de façon sécurisée.
-        Retourne `default` si le modèle échoue (utilisateur/film inconnu).
-        """
-        uid = self._normalize_user_id(user_id)
-        mid = int(movie_id)
-        try:
-            return float(model.predict(uid, mid).est)
-        except Exception:
-            try:
-                return float(model.predict(str(uid), mid).est)
-            except Exception:
-                return default
-
     @staticmethod
-    def _normalize_user_id(user_id):
-        """Convertit les user_id de formulaire (str) en int si possible."""
+    def _normalize_uid(user_id):
         try:
             return int(user_id)
         except (TypeError, ValueError):
             return user_id
 
-    # ------------------------------------------------------------------
-    # Films déjà vus
-    # ------------------------------------------------------------------
+    def _safe_predict(self, model, user_id, movie_id, default=3.0) -> float:
+        uid = self._normalize_uid(user_id)
+        mid = int(movie_id)
+        for u in [uid, str(uid)]:
+            try:
+                return float(model.predict(u, mid).est)
+            except Exception:
+                pass
+        return default
 
     def get_seen_movies(self, user_id) -> set:
-        """Retourne l'ensemble des movieId déjà notés par l'utilisateur."""
-        uid = self._normalize_user_id(user_id)
-        try:
-            inner_uid = self.trainset.to_inner_uid(uid)
-        except ValueError:
+        uid = self._normalize_uid(user_id)
+        for u in [uid, str(uid)]:
             try:
-                inner_uid = self.trainset.to_inner_uid(str(uid))
+                inner = self.trainset.to_inner_uid(u)
+                return {
+                    int(self.trainset.to_raw_iid(iid))
+                    for iid, _ in self.trainset.ur[inner]
+                }
             except ValueError:
-                return set()
-
-        return {
-            int(self.trainset.to_raw_iid(iid))
-            for iid, _ in self.trainset.ur[inner_uid]
-        }
+                pass
+        return set()
 
     # ------------------------------------------------------------------
     # Recommandation individuelle
     # ------------------------------------------------------------------
 
     def recommend(self, user_id, n: int = 10) -> pd.DataFrame:
-        """
-        Génère le top-N hybride pour un utilisateur.
-
-        Retourne un DataFrame avec les colonnes :
-            movieId, title, genres,
-            final_score, svd_score, user_based_score,
-            item_based_score, content_based_score
-        """
+        """Top-N hybride pour un utilisateur existant."""
         if not self._is_fitted:
-            raise RuntimeError("Call fit() before recommend().")
+            raise RuntimeError("Call fit() first.")
 
-        movies        = load_movies()
-        seen_movie_ids = self.get_seen_movies(user_id)
+        movies         = load_movies()
+        seen           = self.get_seen_movies(user_id)
+        rows           = []
 
-        rows = []
         for _, movie in movies.iterrows():
-            movie_id = int(movie[C.ITEM_ID_COL])
-            if movie_id in seen_movie_ids:
+            mid = int(movie[C.ITEM_ID_COL])
+            if mid in seen:
                 continue
 
-            svd_score     = self._safe_predict(self.svd,           user_id, movie_id)
-            user_score    = self._safe_predict(self.user_based,     user_id, movie_id)
-            item_score    = self._safe_predict(self.item_based,     user_id, movie_id)
-            content_score = self._safe_predict(self.content_based,  user_id, movie_id)
-
-            final_score = (
-                WEIGHTS["svd"]           * svd_score
-                + WEIGHTS["user_based"]  * user_score
-                + WEIGHTS["item_based"]  * item_score
-                + WEIGHTS["content_based"] * content_score
-            )
+            svd_score  = self._safe_predict(self.svd,        user_id, mid)
+            item_score = self._safe_predict(self.item_based,  user_id, mid)
+            final      = W_SVD * svd_score + W_ITEM * item_score
 
             rows.append({
-                C.ITEM_ID_COL:        movie_id,
-                C.LABEL_COL:          movie[C.LABEL_COL],
-                C.GENRES_COL:         movie[C.GENRES_COL],
-                "final_score":        round(final_score,   3),
-                "svd_score":          round(svd_score,     3),
-                "user_based_score":   round(user_score,    3),
-                "item_based_score":   round(item_score,    3),
-                "content_based_score":round(content_score, 3),
+                C.ITEM_ID_COL:   mid,
+                C.LABEL_COL:     movie[C.LABEL_COL],
+                C.GENRES_COL:    movie[C.GENRES_COL],
+                "final_score":   round(final,      3),
+                "svd_score":     round(svd_score,  3),
+                "item_score":    round(item_score, 3),
             })
 
-        recs = (
+        return (
             pd.DataFrame(rows)
             .sort_values("final_score", ascending=False)
             .head(n)
             .reset_index(drop=True)
         )
-        return recs
+
+    def recommend_new_user(
+        self,
+        movie_ratings: dict,
+        n: int = 10
+    ) -> pd.DataFrame:
+        """
+        Recommandations pour un nouvel utilisateur non présent dans le trainset.
+
+        Stratégie : content-based léger (similarité cosine sur genres)
+        à partir des films notés par l'utilisateur.
+
+        Paramètres
+        ----------
+        movie_ratings : dict {movieId: rating}
+        """
+        movies    = load_movies()
+        seen_ids  = set(movie_ratings.keys())
+
+        # Construire le profil utilisateur = moyenne des vecteurs genres pondérée
+        genres_dummies = movies[C.GENRES_COL].str.get_dummies(sep="|")
+        genres_dummies.index = movies[C.ITEM_ID_COL]
+
+        liked_vectors = []
+        for mid, rating in movie_ratings.items():
+            if mid in genres_dummies.index and rating >= 3.0:
+                liked_vectors.append(
+                    genres_dummies.loc[mid].values * rating
+                )
+
+        if not liked_vectors:
+            # Fallback : films les plus populaires
+            return self._popular_fallback(movies, seen_ids, n)
+
+        user_profile = np.mean(liked_vectors, axis=0)
+
+        rows = []
+        for _, movie in movies.iterrows():
+            mid = int(movie[C.ITEM_ID_COL])
+            if mid in seen_ids or mid not in genres_dummies.index:
+                continue
+
+            item_vec = genres_dummies.loc[mid].values
+            norm     = np.linalg.norm(user_profile) * np.linalg.norm(item_vec)
+            sim      = float(np.dot(user_profile, item_vec) / norm) if norm else 0.0
+
+            rows.append({
+                C.ITEM_ID_COL:   mid,
+                C.LABEL_COL:     movie[C.LABEL_COL],
+                C.GENRES_COL:    movie[C.GENRES_COL],
+                "final_score":   round(sim,  3),
+                "svd_score":     0.0,
+                "item_score":    round(sim,  3),
+            })
+
+        return (
+            pd.DataFrame(rows)
+            .sort_values("final_score", ascending=False)
+            .head(n)
+            .reset_index(drop=True)
+        )
+
+    def _popular_fallback(self, movies, seen_ids, n):
+        """Retourne les films les plus populaires si pas de profil."""
+        ratings  = load_ratings(surprise_format=False, use_implicit=False)
+        popular  = (
+            ratings.groupby(C.ITEM_ID_COL)[C.RATING_COL]
+            .agg(score="mean")
+            .reset_index()
+            .sort_values("score", ascending=False)
+        )
+        popular = popular[~popular[C.ITEM_ID_COL].isin(seen_ids)].head(n)
+        merged  = popular.merge(movies, on=C.ITEM_ID_COL, how="left")
+        merged["final_score"] = merged["score"].round(3)
+        merged["svd_score"]   = 0.0
+        merged["item_score"]  = 0.0
+        return merged[[C.ITEM_ID_COL, C.LABEL_COL, C.GENRES_COL,
+                        "final_score", "svd_score", "item_score"]].head(n)
 
     # ------------------------------------------------------------------
     # Recommandation de groupe
     # ------------------------------------------------------------------
 
-    def group_recommend(
+    def recommend_group_by_movies(
         self,
-        user_ids: list,
-        n:        int = 10,
+        participants: list,
+        n: int = 8,
         strategy: str = "average"
     ) -> pd.DataFrame:
         """
-        Génère des recommandations pour un groupe d'utilisateurs.
+        Recommandations pour un groupe basées sur les films choisis.
 
-        Stratégies disponibles
-        ----------------------
-        "average"   : moyenne des scores individuels (least misery évitée)
-        "least_misery" : minimum des scores (protège les préférences minoritaires)
+        Chaque participant a une liste de films aimés et/ou souhaités.
+        On génère un score de groupe par agrégation.
 
-        Paramètres
+        Stratégies
         ----------
-        user_ids : liste d'user_id
-        n        : nombre de recommandations
-        strategy : "average" | "least_misery"
+        "average"      : moyenne des scores → satisfait le plus grand nombre
+        "least_misery" : minimum des scores → personne n'est déçu
         """
-        if not self._is_fitted:
-            raise RuntimeError("Call fit() before group_recommend().")
+        movies    = load_movies().set_index(C.ITEM_ID_COL)
+        all_ids   = set(movies.index)
 
-        # Collecter les scores individuels (top-50 par user)
-        group_scores: dict = {}
+        # Collecter tous les movieIds des participants (liked + wishlist)
+        participant_movie_ids = []
+        for p in participants:
+            ids = (
+                [m["id"] for m in p.get("liked",    [])]
+                + [m["id"] for m in p.get("wishlist", [])]
+            )
+            participant_movie_ids.append(set(int(i) for i in ids if i))
 
-        for user_id in user_ids:
-            recs = self.recommend(user_id, n=50)
-            for _, row in recs.iterrows():
-                mid = row[C.ITEM_ID_COL]
-                if mid not in group_scores:
-                    group_scores[mid] = {
-                        "title":  row[C.LABEL_COL],
-                        "genres": row[C.GENRES_COL],
-                        "scores": []
-                    }
-                group_scores[mid]["scores"].append(row["final_score"])
+        # Films candidats = union de tous les films choisis + films similaires
+        all_chosen = set().union(*participant_movie_ids) if participant_movie_ids else set()
 
-        # Agréger selon la stratégie
-        group_recs = []
-        for mid, data in group_scores.items():
-            scores = data["scores"]
+        # Pour chaque film du catalogue, calculer le score de groupe
+        group_scores = {}
+
+        for mid in all_ids:
+            if mid in all_chosen:
+                continue  # On ne recommande pas ce qu'ils ont déjà choisi
+
+            scores = []
+            for p_ids in participant_movie_ids:
+                if not p_ids:
+                    continue
+                # Score basé sur similarité item-item avec les films du participant
+                p_scores = []
+                for chosen_id in p_ids:
+                    try:
+                        inner_i = self.trainset.to_inner_iid(mid)
+                        inner_j = self.trainset.to_inner_iid(chosen_id)
+                        sim = self.item_based.sim[inner_i, inner_j]
+                        p_scores.append(float(sim))
+                    except Exception:
+                        pass
+                if p_scores:
+                    scores.append(np.mean(p_scores))
+
+            if not scores:
+                continue
+
             if strategy == "least_misery":
-                agg_score = min(scores)
-            else:  # average
-                agg_score = sum(scores) / len(scores)
+                group_score = min(scores)
+            else:
+                group_score = np.mean(scores)
 
-            group_recs.append({
-                C.ITEM_ID_COL:  mid,
-                C.LABEL_COL:    data["title"],
-                C.GENRES_COL:   data["genres"],
-                "group_score":  round(agg_score, 3),
-                "n_users":      len(scores)
-            })
+            if group_score > 0:
+                title  = movies.loc[mid, C.LABEL_COL]  if mid in movies.index else str(mid)
+                genres = movies.loc[mid, C.GENRES_COL] if mid in movies.index else ""
+                group_scores[mid] = {
+                    C.LABEL_COL:   title,
+                    C.GENRES_COL:  genres,
+                    "group_score": round(group_score, 4),
+                    "n_users":     len(scores)
+                }
 
+        if not group_scores:
+            return pd.DataFrame(columns=[
+                C.ITEM_ID_COL, C.LABEL_COL, C.GENRES_COL, "group_score", "n_users"
+            ])
+
+        df = pd.DataFrame.from_dict(group_scores, orient="index")
+        df.index.name = C.ITEM_ID_COL
+        df = df.reset_index()
         return (
-            pd.DataFrame(group_recs)
-            .sort_values("group_score", ascending=False)
+            df.sort_values("group_score", ascending=False)
             .head(n)
             .reset_index(drop=True)
         )
@@ -336,48 +328,62 @@ class HybridRecommender:
     # ------------------------------------------------------------------
 
     def explain(self, user_id, movie_id: int) -> str:
-        """
-        Génère une explication lisible pour une recommandation.
+        """Explication lisible basée sur les genres du film."""
+        from loaders import load_items
+        movie_id = int(movie_id)
+        items    = load_items()
 
-        Délègue au ContentBased qui expose les coefficients Ridge
-        (feature importances par utilisateur).
-        """
-        if not self._is_fitted:
-            return "Model not fitted yet."
-        return self.content_based.explain(user_id, movie_id)
+        if movie_id not in items.index:
+            return "Recommended based on your viewing history."
+
+        title  = items.loc[movie_id, C.LABEL_COL]
+        genres = items.loc[movie_id, C.GENRES_COL]
+
+        # Trouver les films similaires déjà vus
+        seen = self.get_seen_movies(user_id)
+        similar_seen = []
+
+        try:
+            inner_i = self.trainset.to_inner_iid(movie_id)
+            sims    = self.item_based.sim[inner_i]
+            top_similar = np.argsort(sims)[::-1][:20]
+
+            for inner_j in top_similar:
+                raw_j = int(self.trainset.to_raw_iid(inner_j))
+                if raw_j in seen and raw_j in items.index:
+                    similar_seen.append(items.loc[raw_j, C.LABEL_COL])
+                if len(similar_seen) >= 2:
+                    break
+        except Exception:
+            pass
+
+        if similar_seen:
+            return (
+                f"Recommended because users who liked "
+                f"{' and '.join(similar_seen)} also enjoyed '{title}'. "
+                f"Genres: {genres}."
+            )
+        return f"'{title}' matches your taste profile. Genres: {genres}."
 
     # ------------------------------------------------------------------
-    # Infos modèle (utile pour la page évaluation de l'app)
+    # Infos pour l'app
     # ------------------------------------------------------------------
-
-    def get_weights(self) -> dict:
-        """Retourne les poids du hybrid (pour affichage dans l'app)."""
-        return WEIGHTS.copy()
 
     def get_model_info(self) -> list:
-        """
-        Retourne une liste de dicts décrivant chaque modèle du hybrid.
-        Utile pour la page évaluation de l'app Flask.
-        """
         return [
             {
                 "name":   "SVD (Latent Factor)",
-                "weight": WEIGHTS["svd"],
-                "desc":   "Matrix factorization — captures hidden user/item patterns."
-            },
-            {
-                "name":   "User-Based KNN (Pearson Baseline)",
-                "weight": WEIGHTS["user_based"],
-                "desc":   "Collaborative filtering — recommends what similar users liked."
+                "weight": W_SVD,
+                "rmse":   0.887,
+                "desc":   "Captures hidden patterns in user-item interactions."
             },
             {
                 "name":   "Item-Based KNN (Pearson Baseline)",
-                "weight": WEIGHTS["item_based"],
-                "desc":   "Collaborative filtering — recommends films similar to those you liked."
-            },
-            {
-                "name":   f"Content-Based Ridge ({self.features_method})",
-                "weight": WEIGHTS["content_based"],
-                "desc":   "Content filtering — based on genres, tags, visual style, and ratings."
+                "weight": W_ITEM,
+                "rmse":   0.876,
+                "desc":   "Recommends movies similar to ones you already liked."
             },
         ]
+
+    def get_weights(self) -> dict:
+        return {"svd": W_SVD, "item_based": W_ITEM}
