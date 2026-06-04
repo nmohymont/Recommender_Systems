@@ -157,7 +157,7 @@ def run_svd_tuning(n_trials=30):
 
     def objective(trial):
         params = {
-            "n_factors": trial.suggest_categorical("n_factors", [20, 50, 75, 100, 150]),
+            "n_factors": trial.suggest_categorical("n_factors", [20, 50, 75, 100, 150, 200, 250, 300, 500]),
             "n_epochs":  trial.suggest_int("n_epochs", 20, 80),
             "lr_all":    trial.suggest_float("lr_all",  0.001, 0.02, log=True),
             "reg_all":   trial.suggest_float("reg_all", 0.01,  0.15, log=True),

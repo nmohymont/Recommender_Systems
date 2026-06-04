@@ -1,24 +1,19 @@
 """
-============
-Pipeline d'évaluation de tous les modèles définis dans configs.py.
+evaluator_test.py
+=================
+Pipeline d'évaluation de tous les modèles définis dans configs_test.py.
 
 Métriques calculées
 -------------------
-- RMSE          : Root Mean Squared Error (prédiction de rating)
-- MAE           : Mean Absolute Error (prédiction de rating)
-- Precision@K   : fraction de recommandations pertinentes dans le top-K
-- Recall@K      : fraction de films pertinents retrouvés dans le top-K
-- Coverage      : proportion du catalogue recommandé au moins une fois
-- Diversity     : diversité intra-liste moyenne (distance Jaccard sur genres)
+- RMSE      : Root Mean Squared Error (prédiction de rating)
+- MAE       : Mean Absolute Error (prédiction de rating)
+- nDCG@K    : Normalized Discounted Cumulative Gain (qualité du ranking)
+- Diversity : diversité intra-liste moyenne (distance Jaccard sur genres)
+- Novelty   : nouveauté moyenne des recommandations (basée sur la popularité)
 
 Usage
 -----
-    python evaluator.py
-
-Output
-------
-    - Tableau récapitulatif affiché dans le terminal
-    - Fichier CSV exporté dans data/small/evaluation/report_YYYY_MM_DD.csv
+    python evaluator_test.py
 """
 
 from collections import defaultdict
@@ -36,15 +31,18 @@ from loaders import load_ratings, load_items, export_evaluation_report
 
 
 # ===========================================================================
-# Métriques top-N
+# nDCG@K
 # ===========================================================================
 
-def precision_recall_at_k(predictions, k=10, threshold=4.0):
+def ndcg_at_k(predictions, k=10, threshold=4.0):
     """
-    Calcule Precision@K et Recall@K pour chaque utilisateur puis moyenne.
+    Normalized Discounted Cumulative Gain @K.
 
-    Precision@K = |{items pertinents dans top-K}| / K
-    Recall@K    = |{items pertinents dans top-K}| / |{items pertinents}|
+    Mesure la qualité du ranking — un film pertinent en position 1
+    vaut plus qu'en position K.
+
+    DCG@K  = Σ (2^rel_i - 1) / log2(i+1)
+    nDCG@K = DCG@K / IDCG@K  (normalisé entre 0 et 1)
 
     Un item est "pertinent" si son vrai rating >= threshold.
     """
@@ -52,29 +50,36 @@ def precision_recall_at_k(predictions, k=10, threshold=4.0):
     for uid, iid, true_r, est, _ in predictions:
         user_est_true[uid].append((est, true_r))
 
-    precisions, recalls = {}, {}
+    ndcg_scores = []
 
     for uid, user_ratings in user_est_true.items():
+        # Trier par score prédit décroissant
         user_ratings.sort(key=lambda x: x[0], reverse=True)
+        top_k = user_ratings[:k]
 
-        n_rel         = sum(1 for _, tr in user_ratings if tr >= threshold)
-        n_rec_k       = sum(1 for est, _ in user_ratings[:k] if est >= threshold)
-        n_rel_and_rec = sum(
-            1 for est, tr in user_ratings[:k]
-            if est >= threshold and tr >= threshold
+        # DCG réel
+        dcg = sum(
+            (1 if true_r >= threshold else 0) / np.log2(i + 2)
+            for i, (_, true_r) in enumerate(top_k)
         )
 
-        precisions[uid] = n_rel_and_rec / n_rec_k if n_rec_k else 0
-        recalls[uid]    = n_rel_and_rec / n_rel   if n_rel   else 0
+        # IDCG = DCG idéal (items triés par vrai rating décroissant)
+        ideal = sorted(user_ratings, key=lambda x: x[1], reverse=True)[:k]
+        idcg = sum(
+            (1 if true_r >= threshold else 0) / np.log2(i + 2)
+            for i, (_, true_r) in enumerate(ideal)
+        )
 
-    precision = sum(precisions.values()) / len(precisions) if precisions else 0
-    recall    = sum(recalls.values())    / len(recalls)    if recalls    else 0
+        ndcg_scores.append(dcg / idcg if idcg > 0 else 0.0)
 
-    return precision, recall
+    return float(np.mean(ndcg_scores)) if ndcg_scores else 0.0
 
+
+# ===========================================================================
+# Diversity
+# ===========================================================================
 
 def get_top_n(predictions, n=10):
-    """Retourne le top-N par utilisateur à partir des prédictions Surprise."""
     top_n = defaultdict(list)
     for uid, iid, true_r, est, _ in predictions:
         top_n[uid].append((iid, est))
@@ -84,31 +89,7 @@ def get_top_n(predictions, n=10):
     return top_n
 
 
-# ===========================================================================
-# Métriques diversité / couverture
-# ===========================================================================
-
-def catalog_coverage(top_n: dict, all_item_ids: set) -> float:
-    """
-    Coverage = |items recommandés uniques| / |catalogue total|
-
-    Mesure la capacité du modèle à couvrir l'ensemble du catalogue.
-    Un modèle avec coverage faible recommande toujours les mêmes films.
-    """
-    recommended = set()
-    for user_recs in top_n.values():
-        for iid, _ in user_recs:
-            recommended.add(int(iid))
-    if not all_item_ids:
-        return 0.0
-    return len(recommended) / len(all_item_ids)
-
-
 def genre_distance(genres_a: str, genres_b: str) -> float:
-    """
-    Distance de Jaccard entre deux ensembles de genres.
-    0 = mêmes genres, 1 = aucun genre en commun.
-    """
     set_a = set(str(genres_a).split("|"))
     set_b = set(str(genres_b).split("|"))
     union = set_a | set_b
@@ -120,15 +101,10 @@ def genre_distance(genres_a: str, genres_b: str) -> float:
 def intra_list_diversity(top_n: dict, items: pd.DataFrame) -> float:
     """
     Diversité intra-liste moyenne.
-
-    Pour chaque utilisateur, calcule la distance moyenne entre toutes les
-    paires de films recommandés (basée sur les genres). Puis moyenne globale.
-
-    Un score proche de 1 = recommandations très diversifiées en termes de genres.
-    Un score proche de 0 = recommandations très homogènes.
+    Distance Jaccard moyenne entre toutes les paires de films recommandés.
+    Score proche de 1 = recommandations très diversifiées en genres.
     """
     diversities = []
-
     for user_recs in top_n.values():
         movie_ids = [
             int(iid) for iid, _ in user_recs
@@ -136,7 +112,6 @@ def intra_list_diversity(top_n: dict, items: pd.DataFrame) -> float:
         ]
         if len(movie_ids) < 2:
             continue
-
         distances = [
             genre_distance(
                 items.loc[movie_ids[i], C.GENRES_COL],
@@ -145,11 +120,43 @@ def intra_list_diversity(top_n: dict, items: pd.DataFrame) -> float:
             for i in range(len(movie_ids))
             for j in range(i + 1, len(movie_ids))
         ]
-
         if distances:
             diversities.append(np.mean(distances))
-
     return float(np.mean(diversities)) if diversities else 0.0
+
+
+# ===========================================================================
+# Novelty
+# ===========================================================================
+
+def novelty(top_n: dict, item_popularity: dict) -> float:
+    """
+    Nouveauté moyenne des recommandations.
+
+    novelty(i) = -log2(popularité(i))
+
+    Un film très populaire → novelty faible (tout le monde le connaît).
+    Un film rare → novelty élevée (découverte inattendue).
+    La popularité est définie comme la proportion d'utilisateurs ayant noté le film.
+    """
+    scores = []
+    for user_recs in top_n.values():
+        user_novelty = []
+        for iid, _ in user_recs:
+            pop = item_popularity.get(int(iid), 1e-10)
+            user_novelty.append(-np.log2(pop))
+        if user_novelty:
+            scores.append(np.mean(user_novelty))
+    return float(np.mean(scores)) if scores else 0.0
+
+
+def compute_item_popularity(ratings: pd.DataFrame) -> dict:
+    """
+    Popularité de chaque item = proportion d'utilisateurs qui l'ont noté.
+    """
+    n_users = ratings[C.USER_ID_COL].nunique()
+    counts  = ratings.groupby(C.ITEM_ID_COL)[C.USER_ID_COL].count()
+    return (counts / n_users).to_dict()
 
 
 # ===========================================================================
@@ -157,12 +164,6 @@ def intra_list_diversity(top_n: dict, items: pd.DataFrame) -> float:
 # ===========================================================================
 
 def evaluate_model(model_name: str, model_class, model_params: dict) -> dict:
-    """
-    Entraîne et évalue un modèle sur un train/test split 75/25.
-
-    Retourne un dict avec toutes les métriques.
-    """
-    # Chargement des données
     ratings = load_ratings(surprise_format=False, use_implicit=False)
     reader  = Reader(rating_scale=C.RATINGS_SCALE)
     data    = Dataset.load_from_df(ratings[C.USER_ITEM_RATINGS], reader)
@@ -173,40 +174,35 @@ def evaluate_model(model_name: str, model_class, model_params: dict) -> dict:
         random_state=1
     )
 
-    # Entraînement
     model = model_class(**model_params)
     model.fit(trainset)
-
-    # Prédictions
     predictions = model.test(testset)
 
-    # Métriques de prédiction
+    # RMSE + MAE
     rmse = accuracy.rmse(predictions, verbose=False)
     mae  = accuracy.mae(predictions,  verbose=False)
 
-    # Métriques top-N
-    precision, recall = precision_recall_at_k(
+    # nDCG@K
+    ndcg = ndcg_at_k(
         predictions,
         k=EvalConfig.top_n_value,
         threshold=EvalConfig.relevance_threshold
     )
 
-    top_n = get_top_n(predictions, n=EvalConfig.top_n_value)
-
-    # Métriques diversité / couverture
-    items        = load_items()
-    all_item_ids = set(items.index)
-    coverage     = catalog_coverage(top_n, all_item_ids)
-    diversity    = intra_list_diversity(top_n, items)
+    # Diversity + Novelty
+    top_n            = get_top_n(predictions, n=EvalConfig.top_n_value)
+    items            = load_items()
+    item_popularity  = compute_item_popularity(ratings)
+    diversity        = intra_list_diversity(top_n, items)
+    nov              = novelty(top_n, item_popularity)
 
     return {
-        "model":                    model_name,
-        "rmse":                     round(rmse,      4),
-        "mae":                      round(mae,       4),
-        f"precision@{EvalConfig.top_n_value}": round(precision, 4),
-        f"recall@{EvalConfig.top_n_value}":    round(recall,    4),
-        "coverage":                 round(coverage,  4),
-        "diversity":                round(diversity, 4),
+        "model":     model_name,
+        "rmse":      round(rmse,      4),
+        "mae":       round(mae,       4),
+        f"ndcg@{EvalConfig.top_n_value}": round(ndcg, 4),
+        "diversity": round(diversity, 4),
+        "novelty":   round(nov,       4),
     }
 
 
@@ -233,10 +229,9 @@ def main():
             print(
                 f"  RMSE={result['rmse']:.4f}  "
                 f"MAE={result['mae']:.4f}  "
-                f"P@{EvalConfig.top_n_value}={result[f'precision@{EvalConfig.top_n_value}']:.4f}  "
-                f"R@{EvalConfig.top_n_value}={result[f'recall@{EvalConfig.top_n_value}']:.4f}  "
-                f"Cov={result['coverage']:.4f}  "
-                f"Div={result['diversity']:.4f}"
+                f"nDCG@{EvalConfig.top_n_value}={result[f'ndcg@{EvalConfig.top_n_value}']:.4f}  "
+                f"Div={result['diversity']:.4f}  "
+                f"Nov={result['novelty']:.4f}"
             )
         except Exception as e:
             print(f"  ✗ Error: {e}")
