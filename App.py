@@ -120,7 +120,7 @@ ALL_MOVIES_JSON = load_movies()[
 @app.route("/")
 def home():
     from content import get_available_genres
-    featured = get_featured_movies(limit=24)
+    featured = get_featured_movies(limit=None)
     records  = featured.to_dict(orient="records")
     records  = enrich_with_tmdb(records)
     genres   = get_available_genres()

@@ -146,12 +146,6 @@ def compute_item_popularity(ratings: pd.DataFrame) -> dict:
 # ===========================================================================
 
 def tune_svd_optuna(n_trials: int = 30) -> dict:
-    """
-    Optimise les hyperparamètres SVD avec Optuna.
-    Utilise le même split 80/20 que l'évaluation standard.
-
-    Retourne les meilleurs paramètres trouvés.
-    """
     try:
         import optuna
         optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -175,13 +169,16 @@ def tune_svd_optuna(n_trials: int = 30) -> dict:
     )
 
     def objective(trial):
+        # On applique les contraintes demandées
         params = {
-            "n_factors": trial.suggest_categorical(
-                "n_factors", [20, 50, 75, 100, 150, 200]
-            ),
-            "n_epochs":  trial.suggest_int("n_epochs", 20, 100),
-            "lr_all":    trial.suggest_float("lr_all", 0.001, 0.02, log=True),
-            "reg_all":   trial.suggest_float("reg_all", 0.01, 0.15, log=True),
+            # On cherche uniquement des petits facteurs (explicabilité préservée)
+            "n_factors": trial.suggest_int("n_factors", 5, 25),
+            # On laisse Optuna trouver le bon moment pour s'arrêter
+            "n_epochs":  trial.suggest_int("n_epochs", 15, 50),
+            # CONSIGNE PROF : learning rate figé à la valeur standard de Surprise
+            "lr_all":    0.005,
+            # On ajuste la régularisation globale
+            "reg_all":   trial.suggest_float("reg_all", 0.02, 0.15, log=True),
             "random_state": 42,
         }
         model = SVD(**params)
@@ -192,16 +189,15 @@ def tune_svd_optuna(n_trials: int = 30) -> dict:
     study = optuna.create_study(direction="minimize")
     study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
 
-    best        = study.best_params
+    best      = study.best_params
     best["random_state"] = 42
-    best_rmse   = round(study.best_value, 4)
+    best_rmse = round(study.best_value, 4)
 
     print(f"\n  Best params (RMSE={best_rmse}):")
     for k, v in best.items():
         if k != "random_state":
             print(f"    {k}: {v}")
 
-    # Sauvegarder dans evaluation/
     C.EVALUATION_PATH.mkdir(parents=True, exist_ok=True)
     params_path = C.EVALUATION_PATH / "svd_best_params.json"
     with open(params_path, "w") as f:
@@ -209,7 +205,6 @@ def tune_svd_optuna(n_trials: int = 30) -> dict:
     print(f"\n  Saved → {params_path}")
 
     return best
-
 
 # ===========================================================================
 # Évaluation d'un modèle

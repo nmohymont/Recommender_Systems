@@ -24,13 +24,40 @@ from models_test import (
 
 class EvalConfig:
     models = [
+        (
+        "svd_optuna_10trials",
+        SVDModel,
+        {"n_factors": 25, "n_epochs": 35, "lr_all": 0.005, "reg_all": 0.1008, "random_state": 42}
+    ),
+    (
+        "svd_optuna_20trials",
+        SVDModel,
+        {"n_factors": 25, "n_epochs": 38, "lr_all": 0.005, "reg_all": 0.0644, "random_state": 42}
+    ),
+    (
+        "svd_optuna_30trials",
+        SVDModel,
+        {"n_factors": 10, "n_epochs": 50, "lr_all": 0.005, "reg_all": 0.0653, "random_state": 42}
+    ),
+    (
+        "svd_optuna_50trials",
+        SVDModel,
+        {"n_factors": 13, "n_epochs": 48, "lr_all": 0.005, "reg_all": 0.0676, "random_state": 42}
+    ),
+    (
+        "svd_optuna_100trials",
+        SVDModel,
+        {"n_factors": 20, "n_epochs": 48, "lr_all": 0.005, "reg_all": 0.0705, "random_state": 42}
+    ),
+
+
 
         # ITR union — tuning k (min_k=5 fixé)
-    ("user_itr_k20_mink5",  UserBasedITRKNN, {"k": 20,  "min_k": 5}),
-    ("user_itr_k40_mink5",  UserBasedITRKNN, {"k": 40,  "min_k": 5}),
-    ("user_itr_k60_mink5",  UserBasedITRKNN, {"k": 60,  "min_k": 5}),
-    ("user_itr_k80_mink5",  UserBasedITRKNN, {"k": 80,  "min_k": 5}),
-    ("user_itr_k100_mink5", UserBasedITRKNN, {"k": 100, "min_k": 5}),
+    # ("user_itr_k20_mink5",  UserBasedITRKNN, {"k": 20,  "min_k": 5}),
+    # ("user_itr_k40_mink5",  UserBasedITRKNN, {"k": 40,  "min_k": 5}),
+    # ("user_itr_k60_mink5",  UserBasedITRKNN, {"k": 60,  "min_k": 5}),
+    # ("user_itr_k80_mink5",  UserBasedITRKNN, {"k": 80,  "min_k": 5}),
+    # ("user_itr_k100_mink5", UserBasedITRKNN, {"k": 100, "min_k": 5}),
 
     # Cosine KNNWithMeans — tuning k
 # ("user_cosine_wm_k20", UserBasedCosineKNN, {"k": 20, "min_k": 3, "min_support": 1}),
@@ -167,9 +194,52 @@ class EvalConfig:
         # ),
         
         # (
+        #     "user_itr_k60_mink1",
+        #     UserBasedITRKNN,
+        #     {"k": 60, "min_k": 1}
+        # ),
+
+        # (
+        #     "user_itr_k60_mink2",
+        #     UserBasedITRKNN,
+        #     {"k": 60, "min_k": 2}
+        # ),
+
+        # (
         #     "user_itr_k60_mink3",
         #     UserBasedITRKNN,
         #     {"k": 60, "min_k": 3}
+        # ),
+
+        # (
+        #     "user_itr_k60_mink5",
+        #     UserBasedITRKNN,
+        #     {"k": 60, "min_k": 5}
+        # ),
+
+
+        # (
+        #     "user_itr_k60_mink7",
+        #     UserBasedITRKNN,
+        #     {"k": 60, "min_k": 7}
+        # ),
+
+        # (
+        #     "user_itr_k60_mink10",
+        #     UserBasedITRKNN,
+        #     {"k": 60, "min_k": 10}
+        # ),
+
+        # (
+        #     "user_itr_k60_mink15",
+        #     UserBasedITRKNN,
+        #     {"k": 60, "min_k": 15}
+        # ),
+
+        # (
+        #     "user_itr_k60_mink20",
+        #     UserBasedITRKNN,
+        #     {"k": 60, "min_k": 20}
         # ),
 
         # ------------------------------------------------------------------
@@ -337,23 +407,24 @@ class EvalConfig:
     #     {"features_method": "V3", "alpha": 24.0}
     # ),
 
-#     (
-#     "content_v4_alpha1",
-#     ContentBased,
-#     {"features_method": "V4", "alpha": 1.0}
-# ),
+    # (
+    # "content_v4_alpha1",
+    # ContentBased,
+    # {"features_method": "V4", "alpha": 1.0}
+#),
 
         # ------------------------------------------------------------------
         # 5. LATENT FACTOR — commenté temporairement
         # ------------------------------------------------------------------
 
         # SVD — default vs tuned Optuna
+
     # (
     #     "svd_default",
     #     SVDModel,
     #     {
-    #         "n_factors":    75,
-    #         "n_epochs":     50,
+    #         "n_factors":    5,
+    #         "n_epochs":     15,
     #         "lr_all":       0.005,
     #         "reg_all":      0.08,
     #         "random_state": 42

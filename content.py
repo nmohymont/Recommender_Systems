@@ -32,7 +32,7 @@ def get_available_genres():
     return sorted(genres)
 
 
-def get_featured_movies(limit=20):
+def get_featured_movies(limit=None):
     ratings = load_ratings(use_implicit=False)
     movies = load_movies()
 
