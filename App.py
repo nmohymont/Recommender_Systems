@@ -15,7 +15,7 @@ from flask import Flask, render_template, request
 import pandas as pd
 import glob
 
-from loaders import load_ratings, load_movies
+from loaders import load_ratings, load_movies, load_tmdb_features
 from content import get_featured_movies
 from recommander_test import HybridRecommender
 from constants import Constant as C
@@ -29,6 +29,32 @@ print("Training hybrid recommender...")
 recommender = HybridRecommender(use_implicit=True)
 recommender.fit()
 print("Models trained successfully.")
+
+# Charger les features TMDB (posters + overviews)
+print("Loading TMDB features...")
+TMDB = load_tmdb_features()
+print(f"  {len(TMDB)} movies with TMDB data loaded.")
+
+
+def enrich_with_tmdb(records: list) -> list:
+    """
+    Ajoute poster_url et overview à une liste de dicts movies.
+    Chaque dict doit avoir une clé 'movieId' ou C.ITEM_ID_COL.
+    """
+    for rec in records:
+        mid = rec.get("movieId") or rec.get(C.ITEM_ID_COL)
+        if mid and int(mid) in TMDB.index:
+            row = TMDB.loc[int(mid)]
+            rec["poster_url"] = row.get("poster_url", "")
+            rec["overview"]   = row.get("overview",   "")
+            rec["runtime"]    = row.get("runtime",    "")
+            rec["vote_average"] = row.get("vote_average", "")
+        else:
+            rec["poster_url"]   = ""
+            rec["overview"]     = ""
+            rec["runtime"]      = ""
+            rec["vote_average"] = ""
+    return records
 
 
 # ---------------------------------------------------------------------------
@@ -49,8 +75,8 @@ def load_latest_report():
         "svd":                        ("Latent Factor", "latent"),
     }
 
-    p10_col  = "precision@10" if "precision@10" in df.columns else None
-    r10_col  = "recall@10"    if "recall@10"    in df.columns else None
+    p10_col   = "precision@10" if "precision@10" in df.columns else None
+    r10_col   = "recall@10"    if "recall@10"    in df.columns else None
     best_rmse = df["rmse"].min()
     best_mae  = df["mae"].min()
     best_p10  = df[p10_col].max() if p10_col else None
@@ -95,18 +121,20 @@ ALL_MOVIES_JSON = load_movies()[
 def home():
     from content import get_available_genres
     featured = get_featured_movies(limit=24)
+    records  = featured.to_dict(orient="records")
+    records  = enrich_with_tmdb(records)
     genres   = get_available_genres()
     return render_template(
         "home.html",
-        featured_movies=featured.to_dict(orient="records"),
+        featured_movies=records,
         genres=genres
     )
 
 
 @app.route("/individual", methods=["GET", "POST"])
 def individual():
-    ratings       = load_ratings(surprise_format=False, use_implicit=True)
-    users         = sorted(ratings["userId"].astype(int).unique())
+    ratings         = load_ratings(surprise_format=False, use_implicit=True)
+    users           = sorted(ratings["userId"].astype(int).unique())
     recommendations = []
     selected_user   = None
     new_user_mode   = False
@@ -120,13 +148,20 @@ def individual():
             n_recommendations = int(request.form.get("n_recommendations", 10))
             recs = recommender.recommend(user_id=selected_user, n=n_recommendations)
             for _, row in recs.iterrows():
+                mid = int(row[C.ITEM_ID_COL])
+                tmdb_row = TMDB.loc[mid] if mid in TMDB.index else None
                 recommendations.append({
+                    "movieId":     mid,
                     "title":       row[C.LABEL_COL],
                     "genres":      row[C.GENRES_COL],
                     "final_score": round(row["final_score"], 2),
                     "svd_score":   round(row["svd_score"],   2),
                     "item_score":  round(row["item_score"],  2),
-                    "explanation": recommender.explain(selected_user, row[C.ITEM_ID_COL])
+                    "explanation": recommender.explain(selected_user, mid),
+                    "poster_url":  tmdb_row["poster_url"] if tmdb_row is not None else "",
+                    "overview":    tmdb_row["overview"]   if tmdb_row is not None else "",
+                    "runtime":     tmdb_row["runtime"]    if tmdb_row is not None else "",
+                    "vote_average":tmdb_row["vote_average"] if tmdb_row is not None else "",
                 })
 
         elif mode == "new_user":
@@ -146,20 +181,28 @@ def individual():
                 movies_df = load_movies().set_index(C.ITEM_ID_COL)
                 rated_movies = [
                     {
-                        "movieId": mid,
-                        "title":   movies_df.loc[mid, C.LABEL_COL] if mid in movies_df.index else str(mid),
-                        "rating":  int(r)
+                        "movieId":   mid,
+                        "title":     movies_df.loc[mid, C.LABEL_COL] if mid in movies_df.index else str(mid),
+                        "rating":    int(r),
+                        "poster_url": TMDB.loc[mid, "poster_url"] if mid in TMDB.index else ""
                     }
                     for mid, r in movie_ratings.items()
                 ]
                 for _, row in recs.iterrows():
+                    mid = int(row[C.ITEM_ID_COL])
+                    tmdb_row = TMDB.loc[mid] if mid in TMDB.index else None
                     recommendations.append({
+                        "movieId":     mid,
                         "title":       row[C.LABEL_COL],
                         "genres":      row[C.GENRES_COL],
                         "final_score": round(row["final_score"], 2),
                         "svd_score":   round(row["svd_score"],   2),
                         "item_score":  round(row["item_score"],  2),
-                        "explanation": "Based on your content profile."
+                        "explanation": "Based on your content profile.",
+                        "poster_url":  tmdb_row["poster_url"] if tmdb_row is not None else "",
+                        "overview":    tmdb_row["overview"]   if tmdb_row is not None else "",
+                        "runtime":     tmdb_row["runtime"]    if tmdb_row is not None else "",
+                        "vote_average":tmdb_row["vote_average"] if tmdb_row is not None else "",
                     })
 
     return render_template(
@@ -212,6 +255,15 @@ def group():
         group_recommendations = group_recs.to_dict(orient="records")
         for rec in group_recommendations:
             rec["group_score"] = round(rec["group_score"], 2)
+            mid = rec.get(C.ITEM_ID_COL) or rec.get("movieId")
+            if mid and int(mid) in TMDB.index:
+                rec["poster_url"]   = TMDB.loc[int(mid), "poster_url"]
+                rec["overview"]     = TMDB.loc[int(mid), "overview"]
+                rec["vote_average"] = TMDB.loc[int(mid), "vote_average"]
+            else:
+                rec["poster_url"]   = ""
+                rec["overview"]     = ""
+                rec["vote_average"] = ""
 
     return render_template(
         "group.html",

@@ -94,7 +94,21 @@
   <article class="movie-card"
            data-title="{{ movie.title | lower }}"
            data-genres="{{ movie.genres }}">
-    <div class="movie-poster-placeholder">🎬</div>
+    <div class="movie-poster-wrapper">
+      {% if movie.poster_url %}
+      <img src="{{ movie.poster_url }}" alt="{{ movie.title }}"
+           class="movie-poster-img"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div class="movie-poster-placeholder" style="display:none;">🎬</div>
+      {% else %}
+      <div class="movie-poster-placeholder">🎬</div>
+      {% endif %}
+      {% if movie.overview %}
+      <div class="movie-overlay">
+        <p class="movie-overview">{{ movie.overview[:150] }}{% if movie.overview|length > 150 %}…{% endif %}</p>
+      </div>
+      {% endif %}
+    </div>
     <div class="movie-card-body">
       <h3>{{ movie.title }}</h3>
       <p class="genres">{{ movie.genres }}</p>
@@ -126,8 +140,7 @@
   <button class="primary-button" onclick="surpriseMe()" id="surprise-btn">
     🎲 Surprise me
   </button>
-  <div id="surprise-result" style="display:none; margin-top:28px; max-width:500px; margin-left:auto; margin-right:auto;">
-  </div>
+  <div id="surprise-result" style="display:none; margin-top:28px; max-width:500px; margin-left:auto; margin-right:auto;"></div>
 </div>
 
 <!-- ── Styles ─────────────────────────────────────────────── -->
@@ -138,7 +151,6 @@
   gap: 12px;
   margin-bottom: 8px;
 }
-
 .mood-btn {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -152,124 +164,119 @@
   gap: 5px;
   font-family: 'DM Sans', sans-serif;
 }
-
-.mood-btn:hover {
-  border-color: var(--border-dark);
-  background: var(--bg-elevated);
-}
-
-.mood-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
+.mood-btn:hover { border-color: var(--border-dark); background: var(--bg-elevated); }
+.mood-btn.active { background: var(--accent); border-color: var(--accent); }
 .mood-btn.active .mood-label,
 .mood-btn.active .mood-desc { color: var(--bg) !important; }
-
 .mood-btn.mood-skip { border-style: dashed; }
 .mood-btn.mood-skip.active { background: var(--bg-elevated); border-color: var(--border-dark); border-style: solid; }
 .mood-btn.mood-skip.active .mood-label { color: var(--text) !important; }
 .mood-btn.mood-skip.active .mood-desc  { color: var(--text-muted) !important; }
-
 .mood-icon  { font-size: 1.6rem; line-height: 1; }
 .mood-label { font-size: 0.82rem; font-weight: 500; color: var(--text); }
 .mood-desc  { font-size: 0.7rem; color: var(--text-muted); font-weight: 300; }
 
-.search-filter-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
+.search-filter-bar { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
 .search-box {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-card); border: 1px solid var(--border-dark);
+  padding: 10px 16px; max-width: 400px;
+}
+.search-icon { font-size: 0.9rem; color: var(--text-muted); }
+.search-box input {
+  background: none; border: none; outline: none;
+  font-family: 'DM Sans', sans-serif; font-size: 0.88rem; color: var(--text); width: 100%;
+}
+.search-box input::placeholder { color: var(--text-dim); }
+.genre-filters { display: flex; flex-wrap: wrap; gap: 7px; }
+.genre-btn {
+  background: var(--bg-card); border: 1px solid var(--border);
+  padding: 4px 14px; font-family: 'DM Sans', sans-serif;
+  font-size: 0.76rem; color: var(--text-muted); cursor: pointer;
+  transition: all 0.15s; letter-spacing: 0.3px;
+}
+.genre-btn:hover { border-color: var(--border-dark); color: var(--text); }
+.genre-btn.active { background: var(--text); border-color: var(--text); color: var(--bg); }
+
+/* Poster */
+.movie-poster-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2/3;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+.movie-poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s ease;
+}
+.movie-card:hover .movie-poster-img { transform: scale(1.04); }
+.movie-poster-placeholder {
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-dark);
-  padding: 10px 16px;
-  max-width: 400px;
+  justify-content: center;
+  font-size: 2.5rem;
+  background: linear-gradient(135deg, var(--bg-elevated), var(--bg-card));
 }
-
-.search-icon { font-size: 0.9rem; color: var(--text-muted); }
-
-.search-box input {
-  background: none;
-  border: none;
-  outline: none;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.88rem;
-  color: var(--text);
-  width: 100%;
+.movie-overlay {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: linear-gradient(to top, rgba(26,18,8,0.92) 0%, transparent 100%);
+  padding: 24px 12px 10px;
+  opacity: 0;
+  transition: opacity 0.25s;
 }
-
-.search-box input::placeholder { color: var(--text-dim); }
-
-.genre-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.genre-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  padding: 4px 14px;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.76rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-  letter-spacing: 0.3px;
-}
-
-.genre-btn:hover { border-color: var(--border-dark); color: var(--text); }
-
-.genre-btn.active {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--bg);
+.movie-card:hover .movie-overlay { opacity: 1; }
+.movie-overview {
+  font-size: 0.72rem;
+  color: rgba(245,240,232,0.85);
+  line-height: 1.5;
+  font-weight: 300;
+  margin: 0;
 }
 
 .surprise-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-dark);
-  padding: 22px 24px;
-  text-align: left;
+  background: var(--bg-card); border: 1px solid var(--border-dark);
+  padding: 22px 24px; text-align: left;
+  display: flex; gap: 20px; align-items: flex-start;
 }
-
-.surprise-card h3 {
+.surprise-poster {
+  width: 80px; flex-shrink: 0;
+  aspect-ratio: 2/3; object-fit: cover;
+  border: 1px solid var(--border);
+}
+.surprise-poster-placeholder {
+  width: 80px; flex-shrink: 0;
+  aspect-ratio: 2/3;
+  background: var(--bg-elevated);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem;
+}
+.surprise-info h3 {
   font-family: 'DM Serif Display', serif;
-  font-size: 1.1rem;
-  color: var(--text);
-  margin-bottom: 6px;
+  font-size: 1.1rem; color: var(--text); margin-bottom: 6px;
 }
-
-.surprise-card .genres {
-  margin-bottom: 12px;
+.surprise-info .genres { margin-bottom: 8px; }
+.surprise-info .overview-text {
+  font-size: 0.78rem; color: var(--text-muted);
+  font-weight: 300; line-height: 1.6; margin-bottom: 12px;
 }
-
-.surprise-card .metrics-row {
-  margin-bottom: 14px;
-}
-
 .surprise-again {
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.82rem;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
+  background: none; border: none; color: var(--accent);
+  font-family: 'DM Sans', sans-serif; font-size: 0.82rem;
+  cursor: pointer; padding: 0; text-decoration: underline;
 }
 </style>
 
 <!-- ── JS ─────────────────────────────────────────────────── -->
 <script>
 const ALL_FEATURED = {{ featured_movies | tojson | safe }};
-let activeMoodGenres  = null;
+let activeMoodGenres   = null;
 let activeGenreFilters = new Set();
 
 function selectMood(btn) {
@@ -280,11 +287,10 @@ function selectMood(btn) {
 }
 
 function skipMood(btn) {
-  // Réinitialise tout — mood, genres, recherche
   document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.genre-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  activeMoodGenres  = null;
+  activeMoodGenres   = null;
   activeGenreFilters = new Set();
   document.getElementById('movie-search-home').value = '';
   filterMovies();
@@ -293,11 +299,9 @@ function skipMood(btn) {
 function toggleGenre(btn) {
   const g = btn.dataset.genre;
   if (activeGenreFilters.has(g)) {
-    activeGenreFilters.delete(g);
-    btn.classList.remove('active');
+    activeGenreFilters.delete(g); btn.classList.remove('active');
   } else {
-    activeGenreFilters.add(g);
-    btn.classList.add('active');
+    activeGenreFilters.add(g); btn.classList.add('active');
   }
   filterMovies();
 }
@@ -306,30 +310,21 @@ function filterMovies() {
   const query   = (document.getElementById('movie-search-home').value || '').toLowerCase().trim();
   const cards   = document.querySelectorAll('.movie-card');
   let   visible = 0;
-
   cards.forEach(card => {
     const title  = card.dataset.title  || '';
     const genres = card.dataset.genres || '';
-
-    // Text search
-    const matchText = !query || title.includes(query);
-
-    // Genre filter buttons
+    const matchText        = !query || title.includes(query);
     const matchGenreFilter = activeGenreFilters.size === 0 ||
       [...activeGenreFilters].every(g => genres.includes(g));
-
-    // Mood filter
     let matchMood = true;
     if (activeMoodGenres) {
       const moodList = activeMoodGenres.split('|');
       matchMood = moodList.some(mg => genres.includes(mg));
     }
-
     const show = matchText && matchGenreFilter && matchMood;
     card.style.display = show ? '' : 'none';
     if (show) visible++;
   });
-
   document.getElementById('no-results').style.display = visible === 0 ? '' : 'none';
 }
 
@@ -337,34 +332,37 @@ function surpriseMe() {
   const btn = document.getElementById('surprise-btn');
   btn.textContent = '⏳ Picking a movie...';
   btn.disabled = true;
-
-  // Filtrer selon mood actif si applicable
   let pool = ALL_FEATURED;
   if (activeMoodGenres) {
     const moodList = activeMoodGenres.split('|');
     pool = pool.filter(m => moodList.some(mg => m.genres && m.genres.includes(mg)));
   }
   if (!pool.length) pool = ALL_FEATURED;
-
-  // Sélection aléatoire
-  const movie = pool[Math.floor(Math.random() * pool.length)];
+  const movie  = pool[Math.floor(Math.random() * pool.length)];
   const result = document.getElementById('surprise-result');
-
+  const posterHtml = movie.poster_url
+    ? `<img src="${movie.poster_url}" class="surprise-poster" alt="${movie.title}" onerror="this.style.display='none'">`
+    : `<div class="surprise-poster-placeholder">🎬</div>`;
+  const overviewHtml = movie.overview
+    ? `<p class="overview-text">${movie.overview.slice(0, 200)}${movie.overview.length > 200 ? '…' : ''}</p>`
+    : '';
   result.innerHTML = `
     <div class="surprise-card">
-      <p style="font-size:0.72rem;font-weight:500;text-transform:uppercase;
-                letter-spacing:2px;color:var(--accent);margin-bottom:10px;">Tonight's pick</p>
-      <h3>${movie.title}</h3>
-      <p class="genres">${movie.genres}</p>
-      <div class="metrics-row">
-        <div><span>Rating</span><strong>${movie.rating_mean.toFixed(2)}</strong></div>
-        <div><span>Votes</span><strong>${movie.rating_count}</strong></div>
-        <div><span>Score</span><strong>${movie.weighted_score.toFixed(2)}</strong></div>
+      ${posterHtml}
+      <div class="surprise-info">
+        <p style="font-size:0.72rem;font-weight:500;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin-bottom:8px;">Tonight's pick</p>
+        <h3>${movie.title}</h3>
+        <p class="genres">${movie.genres}</p>
+        ${overviewHtml}
+        <div class="metrics-row">
+          <div><span>Rating</span><strong>${movie.rating_mean.toFixed(2)}</strong></div>
+          <div><span>Votes</span><strong>${movie.rating_count}</strong></div>
+          <div><span>Score</span><strong>${movie.weighted_score.toFixed(2)}</strong></div>
+        </div>
+        <button class="surprise-again" onclick="surpriseMe()">🎲 Pick another one</button>
       </div>
-      <button class="surprise-again" onclick="surpriseMe()">🎲 Pick another one</button>
     </div>`;
   result.style.display = 'block';
-
   btn.textContent = '🎲 Surprise me';
   btn.disabled = false;
 }

@@ -13,16 +13,19 @@ Métriques calculées
 
 Usage
 -----
-    python evaluator_test.py
+    python evaluator_test.py                    # évaluation standard
+    python evaluator_test.py --tune-svd         # tuning Optuna SVD avant évaluation
+    python evaluator_test.py --tune-svd --n-trials 50
 """
 
 from collections import defaultdict
 from datetime import datetime
 
+import argparse
 import numpy as np
 import pandas as pd
 
-from surprise import accuracy, Dataset, Reader
+from surprise import accuracy, Dataset, Reader, SVD
 from surprise.model_selection import train_test_split
 
 from constants import Constant as C
@@ -38,38 +41,26 @@ def ndcg_at_k(predictions, k=10, threshold=4.0):
     """
     Normalized Discounted Cumulative Gain @K.
 
-    Mesure la qualité du ranking — un film pertinent en position 1
-    vaut plus qu'en position K.
-
     DCG@K  = Σ (2^rel_i - 1) / log2(i+1)
     nDCG@K = DCG@K / IDCG@K  (normalisé entre 0 et 1)
-
-    Un item est "pertinent" si son vrai rating >= threshold.
     """
     user_est_true = defaultdict(list)
     for uid, iid, true_r, est, _ in predictions:
         user_est_true[uid].append((est, true_r))
 
     ndcg_scores = []
-
     for uid, user_ratings in user_est_true.items():
-        # Trier par score prédit décroissant
         user_ratings.sort(key=lambda x: x[0], reverse=True)
         top_k = user_ratings[:k]
-
-        # DCG réel
         dcg = sum(
             (1 if true_r >= threshold else 0) / np.log2(i + 2)
             for i, (_, true_r) in enumerate(top_k)
         )
-
-        # IDCG = DCG idéal (items triés par vrai rating décroissant)
         ideal = sorted(user_ratings, key=lambda x: x[1], reverse=True)[:k]
         idcg = sum(
             (1 if true_r >= threshold else 0) / np.log2(i + 2)
             for i, (_, true_r) in enumerate(ideal)
         )
-
         ndcg_scores.append(dcg / idcg if idcg > 0 else 0.0)
 
     return float(np.mean(ndcg_scores)) if ndcg_scores else 0.0
@@ -102,7 +93,6 @@ def intra_list_diversity(top_n: dict, items: pd.DataFrame) -> float:
     """
     Diversité intra-liste moyenne.
     Distance Jaccard moyenne entre toutes les paires de films recommandés.
-    Score proche de 1 = recommandations très diversifiées en genres.
     """
     diversities = []
     for user_recs in top_n.values():
@@ -131,13 +121,7 @@ def intra_list_diversity(top_n: dict, items: pd.DataFrame) -> float:
 
 def novelty(top_n: dict, item_popularity: dict) -> float:
     """
-    Nouveauté moyenne des recommandations.
-
-    novelty(i) = -log2(popularité(i))
-
-    Un film très populaire → novelty faible (tout le monde le connaît).
-    Un film rare → novelty élevée (découverte inattendue).
-    La popularité est définie comme la proportion d'utilisateurs ayant noté le film.
+    Nouveauté moyenne : novelty(i) = -log2(popularité(i))
     """
     scores = []
     for user_recs in top_n.values():
@@ -151,12 +135,80 @@ def novelty(top_n: dict, item_popularity: dict) -> float:
 
 
 def compute_item_popularity(ratings: pd.DataFrame) -> dict:
-    """
-    Popularité de chaque item = proportion d'utilisateurs qui l'ont noté.
-    """
+    """Popularité = proportion d'utilisateurs ayant noté le film."""
     n_users = ratings[C.USER_ID_COL].nunique()
     counts  = ratings.groupby(C.ITEM_ID_COL)[C.USER_ID_COL].count()
     return (counts / n_users).to_dict()
+
+
+# ===========================================================================
+# Optuna SVD Tuning
+# ===========================================================================
+
+def tune_svd_optuna(n_trials: int = 30) -> dict:
+    """
+    Optimise les hyperparamètres SVD avec Optuna.
+    Utilise le même split 80/20 que l'évaluation standard.
+
+    Retourne les meilleurs paramètres trouvés.
+    """
+    try:
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+    except ImportError:
+        print("  ✗ Optuna not installed. Run: pip install optuna")
+        return {}
+
+    import json
+
+    print("\n" + "=" * 65)
+    print("SVD Hyperparameter Tuning — Optuna")
+    print(f"Trials   : {n_trials}")
+    print(f"Split    : {EvalConfig.test_size * 100:.0f}% test")
+    print("=" * 65)
+
+    ratings  = load_ratings(surprise_format=False, use_implicit=False)
+    reader   = Reader(rating_scale=C.RATINGS_SCALE)
+    data     = Dataset.load_from_df(ratings[C.USER_ITEM_RATINGS], reader)
+    trainset, testset = train_test_split(
+        data, test_size=EvalConfig.test_size, random_state=1
+    )
+
+    def objective(trial):
+        params = {
+            "n_factors": trial.suggest_categorical(
+                "n_factors", [20, 50, 75, 100, 150, 200]
+            ),
+            "n_epochs":  trial.suggest_int("n_epochs", 20, 100),
+            "lr_all":    trial.suggest_float("lr_all", 0.001, 0.02, log=True),
+            "reg_all":   trial.suggest_float("reg_all", 0.01, 0.15, log=True),
+            "random_state": 42,
+        }
+        model = SVD(**params)
+        model.fit(trainset)
+        preds = model.test(testset)
+        return accuracy.rmse(preds, verbose=False)
+
+    study = optuna.create_study(direction="minimize")
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+
+    best        = study.best_params
+    best["random_state"] = 42
+    best_rmse   = round(study.best_value, 4)
+
+    print(f"\n  Best params (RMSE={best_rmse}):")
+    for k, v in best.items():
+        if k != "random_state":
+            print(f"    {k}: {v}")
+
+    # Sauvegarder dans evaluation/
+    C.EVALUATION_PATH.mkdir(parents=True, exist_ok=True)
+    params_path = C.EVALUATION_PATH / "svd_best_params.json"
+    with open(params_path, "w") as f:
+        json.dump({"params": best, "rmse": best_rmse}, f, indent=2)
+    print(f"\n  Saved → {params_path}")
+
+    return best
 
 
 # ===========================================================================
@@ -178,23 +230,20 @@ def evaluate_model(model_name: str, model_class, model_params: dict) -> dict:
     model.fit(trainset)
     predictions = model.test(testset)
 
-    # RMSE + MAE
     rmse = accuracy.rmse(predictions, verbose=False)
     mae  = accuracy.mae(predictions,  verbose=False)
 
-    # nDCG@K
     ndcg = ndcg_at_k(
         predictions,
         k=EvalConfig.top_n_value,
         threshold=EvalConfig.relevance_threshold
     )
 
-    # Diversity + Novelty
-    top_n            = get_top_n(predictions, n=EvalConfig.top_n_value)
-    items            = load_items()
-    item_popularity  = compute_item_popularity(ratings)
-    diversity        = intra_list_diversity(top_n, items)
-    nov              = novelty(top_n, item_popularity)
+    top_n           = get_top_n(predictions, n=EvalConfig.top_n_value)
+    items           = load_items()
+    item_popularity = compute_item_popularity(ratings)
+    diversity       = intra_list_diversity(top_n, items)
+    nov             = novelty(top_n, item_popularity)
 
     return {
         "model":     model_name,
@@ -211,6 +260,21 @@ def evaluate_model(model_name: str, model_class, model_params: dict) -> dict:
 # ===========================================================================
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--tune-svd",  action="store_true",
+                        help="Run Optuna SVD tuning before evaluation")
+    parser.add_argument("--n-trials", type=int, default=30,
+                        help="Number of Optuna trials (default: 30)")
+    args = parser.parse_args()
+
+    # Optuna SVD tuning si demandé
+    if args.tune_svd:
+        best_params = tune_svd_optuna(n_trials=args.n_trials)
+        if best_params:
+            print("\n  → SVD best params will be used if SVDModel is in configs_test.py")
+            print("    Update configs_test.py manually with these params if needed.\n")
+
+    # Évaluation standard
     print("=" * 65)
     print("MLSMM2156 — Evaluation Pipeline")
     print(f"Models   : {len(EvalConfig.models)}")

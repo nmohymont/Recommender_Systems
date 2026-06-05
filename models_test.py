@@ -332,10 +332,14 @@ class ContentBased(AlgoBase):
     Features (V1/V2/V3), alpha=1 optimal empiriquement.
     """
 
-    def __init__(self, features_method: str = "V3", alpha: float = 1.0):
+    def __init__(self, features_method="V3", alpha=1.0, n_topics=20, max_features=150, sbert_model="all-MiniLM-L6-v2"):
+
         AlgoBase.__init__(self)
         self.features_method = features_method
         self.alpha = alpha
+        self.n_topics = n_topics
+        self.max_features = max_features
+        self.sbert_model = sbert_model
         self.content_features = self._create_content_features(features_method)
 
     def _create_content_features(self, method: str) -> pd.DataFrame:
@@ -346,6 +350,10 @@ class ContentBased(AlgoBase):
             return self._features_v2(df_items)
         elif method == "V3":
             return self._features_v3(df_items)
+        elif method == "V4":
+            return self._features_v4(df_items)
+        elif method == "V5":
+            return self._features_v5(df_items)
         else:
             raise NotImplementedError(f"features_method '{method}' inconnu.")
 
@@ -378,7 +386,7 @@ class ContentBased(AlgoBase):
             tags_by_movie = tags.groupby("movieId")["tag"].apply(
                 lambda x: " ".join(x)
             ).reindex(df_items.index).fillna("")
-            tfidf = TfidfVectorizer(max_features=100, min_df=2)
+            tfidf = TfidfVectorizer(max_features=self.max_features, min_df=2)
             tfidf_mat = tfidf.fit_transform(tags_by_movie)
             df_tags = pd.DataFrame(
                 tfidf_mat.toarray(), index=df_items.index,
@@ -430,7 +438,7 @@ class ContentBased(AlgoBase):
             tags_by_movie = tags.groupby("movieId")["tag"].apply(
                 lambda x: " ".join(x)
             ).reindex(df_items.index).fillna("")
-            tfidf = TfidfVectorizer(max_features=150, min_df=2)
+            tfidf = TfidfVectorizer(max_features=self.max_features, min_df=2)
             tfidf_mat = tfidf.fit_transform(tags_by_movie)
             df_tags = pd.DataFrame(
                 tfidf_mat.toarray(), index=df_items.index,
@@ -488,6 +496,165 @@ class ContentBased(AlgoBase):
         df = df.fillna(0)
         scaler = MinMaxScaler()
         df[df.columns] = scaler.fit_transform(df)
+        return df
+
+    
+    def _features_v4(self, df_items):
+        """V4 = V3 + LDA sur les overviews TMDB. Ajoute des features sémantiques basées sur les topics LDA extraits des descriptions des films."""
+        import warnings
+        warnings.filterwarnings("ignore")
+
+    # Base : features V3
+        df = self._features_v3(df_items)
+
+    # Charger TMDB
+        tmdb_path = C.CONTENT_PATH / "tmdb_features.csv"
+        if not tmdb_path.exists():
+            print("  tmdb_features.csv not found, skipping LDA features")
+            return df
+        
+        tmdb = pd.read_csv(tmdb_path)
+        tmdb[C.ITEM_ID_COL] = tmdb["movieId"].astype(float).astype(int)
+        tmdb = tmdb.set_index(C.ITEM_ID_COL)
+
+    # --- LDA sur les overviews ---
+        try:
+            from gensim import corpora
+            from gensim.models import LdaModel
+            from gensim.parsing.preprocessing import (
+                preprocess_string,
+                strip_punctuation,
+                strip_numeric,
+                remove_stopwords,
+                strip_short
+                )
+
+            N_TOPICS = self.n_topics  # nombre de topics LDA
+
+        # Prétraitement des overviews
+            overviews = tmdb["overview"].fillna("").reindex(
+                df_items.index, fill_value=""
+                )
+
+            FILTERS = [
+                strip_punctuation,
+                strip_numeric,
+                remove_stopwords,
+                strip_short
+            ]
+
+            processed = [
+                preprocess_string(str(text), FILTERS)
+                for text in overviews
+            ]
+
+        # Construire le dictionnaire et le corpus
+            dictionary = corpora.Dictionary(processed)
+            dictionary.filter_extremes(no_below=5, no_above=0.5)
+            corpus = [dictionary.doc2bow(doc) for doc in processed]
+
+        # Entraîner LDA
+            lda = LdaModel(
+                corpus=corpus,
+                id2word=dictionary,
+                num_topics=N_TOPICS,
+                random_state=42,
+                passes=10,
+                alpha="auto"
+            )
+
+        # Extraire les distributions de topics pour chaque film
+            topic_matrix = np.zeros((len(df_items), N_TOPICS))
+            for idx, bow in enumerate(corpus):
+                topics = lda.get_document_topics(bow, minimum_probability=0)
+                for topic_id, prob in topics:
+                    topic_matrix[idx, topic_id] = prob
+
+            df_lda = pd.DataFrame(
+                topic_matrix,
+                index=df_items.index,
+                columns=[f"lda_topic_{i}" for i in range(N_TOPICS)]
+            )
+           
+            df = df.join(df_lda)
+
+        # --- Features numériques TMDB supplémentaires ---
+            df["tmdb_vote_average"]  = tmdb["vote_average"].reindex(df_items.index).fillna(0)
+            df["tmdb_vote_count"]    = tmdb["vote_count"].reindex(df_items.index).fillna(0)
+            df["tmdb_popularity"]    = tmdb["popularity"].reindex(df_items.index).fillna(0)
+            df["tmdb_runtime"]       = tmdb["runtime"].reindex(df_items.index).fillna(0)
+
+            print(f"  LDA: {N_TOPICS} topics extracted from TMDB overviews")
+
+        except ImportError:
+            print("  gensim not installed. pip install gensim")
+        except Exception as e:
+            print(f"  LDA error: {e}")
+
+    # Re-normaliser tout
+        from sklearn.preprocessing import MinMaxScaler
+        scaler = MinMaxScaler()
+        df[df.columns] = scaler.fit_transform(df.fillna(0))
+        return df
+    
+    def _features_v5(self, df_items):
+        """ V5 = V3 + Sentence-BERT embeddings sur les overviews TMDB. Remplace LDA par des embeddings denses de 384 dimensions."""
+        # Base : features V3
+        df = self._features_v3(df_items)
+
+        # Charger TMDB
+        tmdb_path = C.CONTENT_PATH / "tmdb_features.csv"
+        if not tmdb_path.exists():
+            print("  tmdb_features.csv not found, skipping SBERT features")
+            return df
+
+        tmdb = pd.read_csv(tmdb_path)
+        tmdb[C.ITEM_ID_COL] = tmdb["movieId"].astype(float).astype(int)
+        tmdb = tmdb.set_index(C.ITEM_ID_COL)
+
+        try:
+            from sentence_transformers import SentenceTransformer
+            print(f"  Loading SBERT model: {self.sbert_model}...")
+            model = SentenceTransformer(self.sbert_model)
+
+            # Overviews alignées avec df_items
+            overviews = tmdb["overview"].reindex(
+                df_items.index, fill_value=""
+                ).fillna("").tolist()
+
+            print(f"  Encoding {len(overviews)} overviews...")
+            embeddings = model.encode(
+                overviews,
+                batch_size=64,
+                show_progress_bar=False
+                )
+
+            # Créer DataFrame des embeddings
+            n_dims = embeddings.shape[1]
+            df_sbert = pd.DataFrame(
+                embeddings,
+                index=df_items.index,
+                columns=[f"sbert_{i}" for i in range(n_dims)]
+                )
+            df = df.join(df_sbert)
+
+            # Features numériques TMDB
+            df["tmdb_vote_average"] = tmdb["vote_average"].reindex(df_items.index).fillna(0)
+            df["tmdb_vote_count"]   = tmdb["vote_count"].reindex(df_items.index).fillna(0)
+            df["tmdb_popularity"]   = tmdb["popularity"].reindex(df_items.index).fillna(0)
+            df["tmdb_runtime"]      = tmdb["runtime"].reindex(df_items.index).fillna(0)
+
+            print(f"  SBERT: {n_dims} dimensions extracted")
+
+        except ImportError:
+            print("  sentence-transformers not installed.")
+        except Exception as e:
+            print(f"  SBERT error: {e}")
+
+        # Re-normaliser
+        from sklearn.preprocessing import MinMaxScaler
+        scaler = MinMaxScaler()
+        df[df.columns] = scaler.fit_transform(df.fillna(0))
         return df
 
     def fit(self, trainset):

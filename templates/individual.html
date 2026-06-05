@@ -56,11 +56,15 @@
         <div class="rated-row" data-id="{{ m.movieId }}"
              style="display:flex;align-items:center;gap:12px;padding:9px 12px;
                     background:var(--bg-elevated);border:1px solid var(--border);">
+          {% if m.poster_url %}
+          <img src="{{ m.poster_url }}" alt="{{ m.title }}"
+               style="width:32px;aspect-ratio:2/3;object-fit:cover;border:1px solid var(--border);"
+               onerror="this.style.display='none'">
+          {% endif %}
           <span style="flex:1;font-size:0.86rem;">{{ m.title }}</span>
           <div class="star-rating" data-id="{{ m.movieId }}" data-rating="{{ m.rating }}">
             {% for i in range(1,6) %}
-            <span class="star {% if i <= m.rating %}filled{% endif %}" data-val="{{ i }}"
-                  style="cursor:pointer;font-size:1.2rem;color:{% if i <= m.rating %}var(--accent){% else %}var(--text-dim){% endif %};transition:0.15s;"
+            <span style="cursor:pointer;font-size:1.2rem;color:{% if i <= m.rating %}var(--accent){% else %}var(--text-dim){% endif %};transition:0.15s;"
                   onclick="setRating({{ m.movieId }}, {{ i }})">★</span>
             {% endfor %}
           </div>
@@ -88,18 +92,46 @@
 <div class="recommendations-list">
   {% for movie in recommendations %}
   <article class="recommendation-card">
-    <div class="recommendation-header">
-      <h3>{{ loop.index }}. {{ movie.title }}</h3>
-      <span class="score-pill">{{ movie.final_score }}</span>
-    </div>
-    <p class="genres">{{ movie.genres }}</p>
-    <div class="score-grid two">
-      <div><span>SVD</span><strong>{{ movie.svd_score }}</strong></div>
-      <div><span>Item-based</span><strong>{{ movie.item_score }}</strong></div>
-    </div>
-    <div class="explanation-box">
-      <strong>Why this movie?</strong>
-      <p>{{ movie.explanation }}</p>
+    <div style="display:flex;gap:20px;align-items:flex-start;">
+      <!-- Poster -->
+      <div style="flex-shrink:0;width:90px;">
+        {% if movie.poster_url %}
+        <img src="{{ movie.poster_url }}" alt="{{ movie.title }}"
+             style="width:90px;aspect-ratio:2/3;object-fit:cover;border:1px solid var(--border);"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div style="display:none;width:90px;aspect-ratio:2/3;background:var(--bg-elevated);
+                    align-items:center;justify-content:center;font-size:1.5rem;border:1px solid var(--border);">🎬</div>
+        {% else %}
+        <div style="width:90px;aspect-ratio:2/3;background:var(--bg-elevated);
+                    display:flex;align-items:center;justify-content:center;
+                    font-size:1.5rem;border:1px solid var(--border);">🎬</div>
+        {% endif %}
+      </div>
+      <!-- Info -->
+      <div style="flex:1;">
+        <div class="recommendation-header">
+          <h3>{{ loop.index }}. {{ movie.title }}</h3>
+          <span class="score-pill">{{ movie.final_score }}</span>
+        </div>
+        <p class="genres">{{ movie.genres }}</p>
+        {% if movie.overview %}
+        <p style="font-size:0.82rem;color:var(--text-muted);font-weight:300;line-height:1.6;margin-bottom:12px;">
+          {{ movie.overview[:200] }}{% if movie.overview|length > 200 %}…{% endif %}
+        </p>
+        {% endif %}
+        <div style="display:flex;gap:16px;margin-bottom:12px;font-size:0.78rem;color:var(--text-muted);">
+          {% if movie.runtime %}<span>⏱ {{ movie.runtime|int }} min</span>{% endif %}
+          {% if movie.vote_average %}<span>⭐ {{ movie.vote_average }} TMDB</span>{% endif %}
+        </div>
+        <div class="score-grid two">
+          <div><span>SVD</span><strong>{{ movie.svd_score }}</strong></div>
+          <div><span>Item-based</span><strong>{{ movie.item_score }}</strong></div>
+        </div>
+        <div class="explanation-box">
+          <strong>Why this movie?</strong>
+          <p>{{ movie.explanation }}</p>
+        </div>
+      </div>
     </div>
   </article>
   {% endfor %}

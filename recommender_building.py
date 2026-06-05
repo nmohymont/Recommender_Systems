@@ -129,68 +129,6 @@ def run_implicit_library():
     print(implicit_ratings.head(10).to_string(index=False))
 
 
-# ===========================================================================
-# PARTIE 2 — SVD Tuning avec Optuna
-# ===========================================================================
-
-def run_svd_tuning(n_trials=30):
-    """
-    Optimise les hyperparamètres SVD avec Optuna et met à jour
-    les paramètres dans MODELS_TO_TRAIN.
-    """
-    print("\n" + "="*55)
-    print("STEP 2 — SVD Tuning with Optuna")
-    print("="*55)
-
-    try:
-        import optuna
-        optuna.logging.set_verbosity(optuna.logging.WARNING)
-    except ImportError:
-        print("  Optuna not installed. pip install optuna")
-        print("  Skipping SVD tuning — using default params.")
-        return
-
-    ratings  = load_ratings(surprise_format=False, use_implicit=False)
-    reader   = Reader(rating_scale=C.RATINGS_SCALE)
-    data     = Dataset.load_from_df(ratings[C.USER_ITEM_RATINGS], reader)
-    trainset, testset = train_test_split(data, test_size=0.25, random_state=1)
-
-    def objective(trial):
-        params = {
-            "n_factors": trial.suggest_categorical("n_factors", [20, 50, 75, 100, 150, 200, 250, 300, 500]),
-            "n_epochs":  trial.suggest_int("n_epochs", 20, 80),
-            "lr_all":    trial.suggest_float("lr_all",  0.001, 0.02, log=True),
-            "reg_all":   trial.suggest_float("reg_all", 0.01,  0.15, log=True),
-            "random_state": 42
-        }
-        model = SVD(**params)
-        model.fit(trainset)
-        preds = model.test(testset)
-        return accuracy.rmse(preds, verbose=False)
-
-    print(f"  Running {n_trials} trials...")
-    study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
-
-    best        = study.best_params
-    best["random_state"] = 42
-    best_rmse   = round(study.best_value, 4)
-
-    print(f"\n  Best params (RMSE={best_rmse}):")
-    for k, v in best.items():
-        print(f"    {k}: {v}")
-
-    # Mettre à jour MODELS_TO_TRAIN avec les meilleurs params
-    MODELS_TO_TRAIN["svd"] = (SVDModel, best)
-
-    # Sauvegarder les meilleurs params
-    C.EVALUATION_PATH.mkdir(parents=True, exist_ok=True)
-    params_path = C.EVALUATION_PATH / "svd_best_params.json"
-    with open(params_path, "w") as f:
-        json.dump({"params": best, "rmse": best_rmse}, f, indent=2)
-    print(f"\n  Saved to {params_path}")
-    print("\n  Update configs.py 'svd_default' with these params for evaluator.py")
-
 
 # ===========================================================================
 # PARTIE 3 — Model Training & Pickle

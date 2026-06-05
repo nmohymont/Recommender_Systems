@@ -25,6 +25,13 @@ from models_test import (
 class EvalConfig:
     models = [
 
+        # ITR union — tuning k (min_k=5 fixé)
+    ("user_itr_k20_mink5",  UserBasedITRKNN, {"k": 20,  "min_k": 5}),
+    ("user_itr_k40_mink5",  UserBasedITRKNN, {"k": 40,  "min_k": 5}),
+    ("user_itr_k60_mink5",  UserBasedITRKNN, {"k": 60,  "min_k": 5}),
+    ("user_itr_k80_mink5",  UserBasedITRKNN, {"k": 80,  "min_k": 5}),
+    ("user_itr_k100_mink5", UserBasedITRKNN, {"k": 100, "min_k": 5}),
+
     # Cosine KNNWithMeans — tuning k
 # ("user_cosine_wm_k20", UserBasedCosineKNN, {"k": 20, "min_k": 3, "min_support": 1}),
 # ("user_cosine_wm_k40", UserBasedCosineKNN, {"k": 40, "min_k": 3, "min_support": 1}),
@@ -171,124 +178,124 @@ class EvalConfig:
         # ------------------------------------------------------------------
         # ITEM-BASED — Cosine classique (KNNBasic)
         # ------------------------------------------------------------------
-        (
-            "item_cosine_k20",
-            ItemBasedCosineKNN,
-            {"k": 20, "min_k": 3}
-        ),
-        (
-            "item_cosine_k40",
-            ItemBasedCosineKNN,
-            {"k": 40, "min_k": 3}
-        ),
-        (
-            "item_cosine_k60",
-            ItemBasedCosineKNN,
-            {"k": 60, "min_k": 3}
-        ),
-        (
-            "item_cosine_k80",
-            ItemBasedCosineKNN,
-            {"k": 80, "min_k": 3}
-        ),
-        (
-            "item_cosine_k100",
-            ItemBasedCosineKNN,
-            {"k": 100, "min_k": 3}
-        ),
+        # (
+        #     "item_cosine_k20",
+        #     ItemBasedCosineKNN,
+        #     {"k": 20, "min_k": 3}
+        # ),
+        # (
+        #     "item_cosine_k40",
+        #     ItemBasedCosineKNN,
+        #     {"k": 40, "min_k": 3}
+        # ),
+        # (
+        #     "item_cosine_k60",
+        #     ItemBasedCosineKNN,
+        #     {"k": 60, "min_k": 3}
+        # ),
+        # (
+        #     "item_cosine_k80",
+        #     ItemBasedCosineKNN,
+        #     {"k": 80, "min_k": 3}
+        # ),
+        # (
+        #     "item_cosine_k100",
+        #     ItemBasedCosineKNN,
+        #     {"k": 100, "min_k": 3}
+        # ),
 
         # ------------------------------------------------------------------
         # ITEM-BASED — Adjusted Cosine (KNNWithMeans)
         # ------------------------------------------------------------------
-        (
-            "item_adjcosine_k20",
-            ItemBasedKNN,
-            {"k": 20, "min_k": 3}
-        ),
-        (
-            "item_adjcosine_k40",
-            ItemBasedKNN,
-            {"k": 40, "min_k": 3}
-        ),
-        (
-            "item_adjcosine_k60",
-            ItemBasedKNN,
-            {"k": 60, "min_k": 3}
-        ),
-        (
-            "item_adjcosine_k80",
-            ItemBasedKNN,
-            {"k": 80, "min_k": 3}
-        ),
-        (
-            "item_adjcosine_k100",
-            ItemBasedKNN,
-            {"k": 100, "min_k": 3}
-        ),
+        # (
+        #     "item_adjcosine_k20",
+        #     ItemBasedKNN,
+        #     {"k": 20, "min_k": 3}
+        # ),
+        # (
+        #     "item_adjcosine_k40",
+        #     ItemBasedKNN,
+        #     {"k": 40, "min_k": 3}
+        # ),
+        # (
+        #     "item_adjcosine_k60",
+        #     ItemBasedKNN,
+        #     {"k": 60, "min_k": 3}
+        # ),
+        # (
+        #     "item_adjcosine_k80",
+        #     ItemBasedKNN,
+        #     {"k": 80, "min_k": 3}
+        # ),
+        # (
+        #     "item_adjcosine_k100",
+        #     ItemBasedKNN,
+        #     {"k": 100, "min_k": 3}
+        # ),
 
         # ITEM-BASED Adjusted Cosine — tuning min_k (k=60 meilleur nDCG)
-    (
-        "item_adjcosine_k60_mink1",
-        ItemBasedKNN,
-        {"k": 60, "min_k": 1}
-    ),
-    (
-        "item_adjcosine_k60_mink2",
-        ItemBasedKNN,
-        {"k": 60, "min_k": 2}
-    ),
-    (
-        "item_adjcosine_k60_mink3",
-        ItemBasedKNN,
-        {"k": 60, "min_k": 3}
-    ),
-    (
-        "item_adjcosine_k60_mink5",
-        ItemBasedKNN,
-        {"k": 60, "min_k": 5}
-    ),
-    (
-        "item_adjcosine_k60_mink7",
-        ItemBasedKNN,
-        {"k": 60, "min_k": 7}
-    ),
-    (
-        "item_adjcosine_k60_mink10",
-        ItemBasedKNN,
-        {"k": 60, "min_k": 10}
-    ),
+    # (
+    #     "item_adjcosine_k60_mink1",
+    #     ItemBasedKNN,
+    #     {"k": 60, "min_k": 1}
+    # ),
+    # (
+    #     "item_adjcosine_k60_mink2",
+    #     ItemBasedKNN,
+    #     {"k": 60, "min_k": 2}
+    # ),
+    # (
+    #     "item_adjcosine_k60_mink3",
+    #     ItemBasedKNN,
+    #     {"k": 60, "min_k": 3}
+    # ),
+    # (
+    #     "item_adjcosine_k60_mink5",
+    #     ItemBasedKNN,
+    #     {"k": 60, "min_k": 5}
+    # ),
+    # (
+    #     "item_adjcosine_k60_mink7",
+    #     ItemBasedKNN,
+    #     {"k": 60, "min_k": 7}
+    # ),
+    # (
+    #     "item_adjcosine_k60_mink10",
+    #     ItemBasedKNN,
+    #     {"k": 60, "min_k": 10}
+    # ),
 
     # ITEM-BASED Cosine classique — tuning min_k (k=80)
-    (
-        "item_cosine_k80_mink1",
-        ItemBasedCosineKNN,
-        {"k": 80, "min_k": 1}
-    ),
-    (
-        "item_cosine_k80_mink2",
-        ItemBasedCosineKNN,
-        {"k": 80, "min_k": 2}
-    ),
-    (
-        "item_cosine_k80_mink3",
-        ItemBasedCosineKNN,
-        {"k": 80, "min_k": 3}
-    ),
-    (
-        "item_cosine_k80_mink5",
-        ItemBasedCosineKNN,
-        {"k": 80, "min_k": 5}
-    ),
-    (
-        "item_cosine_k80_mink7",
-        ItemBasedCosineKNN,
-        {"k": 80, "min_k": 7}
-    ),
-    (
-        "item_cosine_k80_mink10",
-        ItemBasedCosineKNN,
-        {"k": 80, "min_k": 10}
-    ),
+    # (
+    #     "item_cosine_k80_mink1",
+    #     ItemBasedCosineKNN,
+    #     {"k": 80, "min_k": 1}
+    # ),
+    # (
+    #     "item_cosine_k80_mink2",
+    #     ItemBasedCosineKNN,
+    #     {"k": 80, "min_k": 2}
+    # ),
+    # (
+    #     "item_cosine_k80_mink3",
+    #     ItemBasedCosineKNN,
+    #     {"k": 80, "min_k": 3}
+    # ),
+    # (
+    #     "item_cosine_k80_mink5",
+    #     ItemBasedCosineKNN,
+    #     {"k": 80, "min_k": 5}
+    # ),
+    # (
+    #     "item_cosine_k80_mink7",
+    #     ItemBasedCosineKNN,
+    #     {"k": 80, "min_k": 7}
+    # ),
+    # (
+    #     "item_cosine_k80_mink10",
+    #     ItemBasedCosineKNN,
+    #     {"k": 80, "min_k": 10}
+    # ),
 
         # ------------------------------------------------------------------
         # 4. CONTENT-BASED — commenté temporairement
@@ -330,6 +337,12 @@ class EvalConfig:
     #     {"features_method": "V3", "alpha": 24.0}
     # ),
 
+#     (
+#     "content_v4_alpha1",
+#     ContentBased,
+#     {"features_method": "V4", "alpha": 1.0}
+# ),
+
         # ------------------------------------------------------------------
         # 5. LATENT FACTOR — commenté temporairement
         # ------------------------------------------------------------------
@@ -358,7 +371,7 @@ class EvalConfig:
     #     }
     # ),
 
-    # # SVD — tuning n_factors
+    # # # SVD — tuning n_factors
     # (
     #     "svd_factors50",
     #     SVDModel,
@@ -393,30 +406,30 @@ class EvalConfig:
     #     }
     # ),
         
-        #(
-        #    "svd_default",
-        #    SVDModel,
-        #    {
-        #        "n_factors": 75,
-        #        "n_epochs":  50,
-        #        "lr_all":    0.005,
-        #        "reg_all":   0.08,
-        #        "random_state": 42
-        #    }
-        #),
+    #     (
+    #        "svd_default",
+    #        SVDModel,
+    #        {
+    #            "n_factors": 75,
+    #            "n_epochs":  50,
+    #            "lr_all":    0.005,
+    #            "reg_all":   0.08,
+    #            "random_state": 42
+    #        }
+    #     ),
         
-        #(
+    #     (
 
-        #    "svd_tuned",
-        #    SVDModel,
-        #    {
-        #        "n_factors":    100,
-        #        "n_epochs":     80,
-        #        "lr_all":       0.007565017481617904,
-        #        "reg_all":      0.10761653019253145,
-        #        "random_state": 42
-        #    }
-        #),
+    #        "svd_tuned",
+    #        SVDModel,
+    #        {
+    #            "n_factors":    100,
+    #            "n_epochs":     80,
+    #            "lr_all":       0.007565017481617904,
+    #            "reg_all":      0.10761653019253145,
+    #            "random_state": 42
+    #        }
+    #     ),
     
     ]
 
