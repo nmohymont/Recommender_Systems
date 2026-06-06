@@ -26,9 +26,9 @@ from models_test import (
 class EvalConfig:
     models = [
 
-        ("hybrid_045_030_025", HybridModel, {"w_svd": 0.45, "w_content": 0.30, "w_user": 0.25}),
-        # ("hybrid_040_030_030", HybridModel, {"w_svd": 0.40, "w_content": 0.30, "w_user": 0.30}),
-        # ("hybrid_050_025_025", HybridModel, {"w_svd": 0.50, "w_content": 0.25, "w_user": 0.25}),
+        #("hybrid_045_030_025", HybridModel, {"w_svd": 0.45, "w_content": 0.30, "w_user": 0.25}),
+         #("hybrid_040_030_030", HybridModel, {"w_svd": 0.40, "w_content": 0.30, "w_user": 0.30}),
+         ("hybrid_050_025_025", HybridModel, {"w_svd": 0.50, "w_content": 0.25, "w_user": 0.25}),
 
         #("svd_optuna_tuning", SVDModel, {}),
     
@@ -351,11 +351,11 @@ class EvalConfig:
         # 4. CONTENT-BASED — commenté temporairement
         # ------------------------------------------------------------------
         # CONTENT-BASED — V3 avec différents alpha
-    # (
-    #     "content_v1",
-    #     ContentBased,
-    #     {"features_method": "V1", "alpha": 1.0}
-    # ),
+    #  (
+    #      "content_v1",
+    #      ContentBased,
+    #      {"features_method": "V1", "alpha": 1.0}
+    #  ),
     # (
     #     "content_v2",
     #     ContentBased,

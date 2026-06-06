@@ -217,32 +217,32 @@ def evaluate_model(model_name: str, model_class, model_params: dict) -> dict:
     ratings = load_ratings(surprise_format=False, use_implicit=False)
     reader  = Reader(rating_scale=C.RATINGS_SCALE)
     data    = Dataset.load_from_df(ratings[C.USER_ITEM_RATINGS], reader)
-
+ 
     trainset, testset = train_test_split(
         data,
         test_size=EvalConfig.test_size,
         random_state=1
     )
-
+ 
     model = model_class(**model_params)
     model.fit(trainset)
     predictions = model.test(testset)
-
+ 
     rmse = accuracy.rmse(predictions, verbose=False)
     mae  = accuracy.mae(predictions,  verbose=False)
-
+ 
     ndcg = ndcg_at_k(
         predictions,
         k=EvalConfig.top_n_value,
         threshold=EvalConfig.relevance_threshold
     )
-
+ 
     top_n           = get_top_n(predictions, n=EvalConfig.top_n_value)
     items           = load_items()
     item_popularity = compute_item_popularity(ratings)
     diversity       = intra_list_diversity(top_n, items)
     nov             = novelty(top_n, item_popularity)
-
+ 
     return {
         "model":     model_name,
         "rmse":      round(rmse,      4),
@@ -251,6 +251,8 @@ def evaluate_model(model_name: str, model_class, model_params: dict) -> dict:
         "diversity": round(diversity, 4),
         "novelty":   round(nov,       4),
     }
+ 
+ 
 
 
 # ===========================================================================

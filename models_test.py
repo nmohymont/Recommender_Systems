@@ -658,23 +658,37 @@ class ContentBased(AlgoBase):
         return df
 
     def fit(self, trainset):
+        """Profile Learner"""
         AlgoBase.fit(self, trainset)
+        
+        # Preallocate user profiles
+        self.user_profile = {u: None for u in trainset.all_users()}
+        
         feature_names = self.content_features.columns.tolist()
-        self.user_profile = {}
-        for u in trainset.all_users():
+
+        for u in self.user_profile:  # loop over every user in the self.user_profile dictionary
+
             df_user = pd.DataFrame(
-                trainset.ur[u], columns=["inner_item_id", "user_ratings"]
-            )
-            df_user["item_id"] = df_user["inner_item_id"].map(trainset.to_raw_iid)
+                    self.trainset.ur[u],
+                    columns=["inner_item_id", "user_ratings"])
+
+            df_user["item_id"] = df_user["inner_item_id"].map(
+                    self.trainset.to_raw_iid)
+
             df_user = df_user.merge(
-                self.content_features, how="left",
-                left_on="item_id", right_index=True
-            )
+                    self.content_features,
+                    how="left",
+                    left_on="item_id",
+                    right_index=True)
+
             X = df_user[feature_names].values
             y = df_user["user_ratings"].values
+
             reg = Ridge(alpha=self.alpha)
             reg.fit(X, y)
-            self.user_profile[u] = reg
+
+            self.user_profile[u] = reg 
+                
         return self
 
     def estimate(self, u, i):
@@ -811,27 +825,38 @@ class HybridModel(AlgoBase):
         scores  = []
         weights = []
 
+        # 1. SVD
         try:
-            scores.append(self.svd.predict(u, i).est)
+            # On appelle directement estimate car u et i sont des IDs internes
+            svd_score = self.svd.estimate(u, i)
+            scores.append(svd_score)
             weights.append(self.w_svd)
-        except Exception:
-            pass
+        except PredictionImpossible:
+            pass  # Si le SVD ne peut pas prédire (ex: item inconnu pour lui)
 
+        # 2. Content-Based
         try:
-            scores.append(self.content.predict(u, i).est)
+            content_score = self.content.estimate(u, i)
+            scores.append(content_score)
             weights.append(self.w_content)
-        except Exception:
+        except PredictionImpossible:
             pass
 
+        # 3. User-Based ITR
         try:
-            scores.append(self.user.predict(u, i).est)
+            user_score = self.user.estimate(u, i)
+            scores.append(user_score)
             weights.append(self.w_user)
-        except Exception:
+        except PredictionImpossible:
             pass
 
+        # Si aucun modèle n'a réussi à donner une estimation, on utilise la moyenne globale
         if not scores:
-            raise PredictionImpossible("All models failed.")
+            return float(self.trainset.global_mean)
 
+        # Calcul de la moyenne pondérée adaptative (si un modèle a échoué)
         total_w = sum(weights)
         pred    = sum(s * w for s, w in zip(scores, weights)) / total_w
-        return float(np.clip(pred, C.RATINGS_SCALE[0], C.RATINGS_SCALE[1]))
+        
+        # Sécurité pour les bornes de note (ex: 0.5 à 5.0)
+        return float(np.clip(pred, self.trainset.rating_scale[0], self.trainset.rating_scale[1]))
