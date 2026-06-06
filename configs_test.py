@@ -24,34 +24,9 @@ from models_test import (
 
 class EvalConfig:
     models = [
-        (
-        "svd_optuna_10trials",
-        SVDModel,
-        {"n_factors": 25, "n_epochs": 35, "lr_all": 0.005, "reg_all": 0.1008, "random_state": 42}
-    ),
-    (
-        "svd_optuna_20trials",
-        SVDModel,
-        {"n_factors": 25, "n_epochs": 38, "lr_all": 0.005, "reg_all": 0.0644, "random_state": 42}
-    ),
-    (
-        "svd_optuna_30trials",
-        SVDModel,
-        {"n_factors": 10, "n_epochs": 50, "lr_all": 0.005, "reg_all": 0.0653, "random_state": 42}
-    ),
-    (
-        "svd_optuna_50trials",
-        SVDModel,
-        {"n_factors": 13, "n_epochs": 48, "lr_all": 0.005, "reg_all": 0.0676, "random_state": 42}
-    ),
-    (
-        "svd_optuna_100trials",
-        SVDModel,
-        {"n_factors": 20, "n_epochs": 48, "lr_all": 0.005, "reg_all": 0.0705, "random_state": 42}
-    ),
 
-
-
+        ("svd_optuna_tuning", SVDModel, {}),
+    
         # ITR union — tuning k (min_k=5 fixé)
     # ("user_itr_k20_mink5",  UserBasedITRKNN, {"k": 20,  "min_k": 5}),
     # ("user_itr_k40_mink5",  UserBasedITRKNN, {"k": 40,  "min_k": 5}),
@@ -381,10 +356,21 @@ class EvalConfig:
     #     ContentBased,
     #     {"features_method": "V2", "alpha": 1.0}
     # ),
+
+    # (
+    #     "content_v3_alpha001",
+    #     ContentBased,
+    #     {"features_method": "V3", "alpha": 0.01}
+    # ),
     # (
     #     "content_v3_alpha01",
     #     ContentBased,
     #     {"features_method": "V3", "alpha": 0.1}
+    # ),
+    # (
+    #     "content_v3_alpha05",
+    #     ContentBased,
+    #     {"features_method": "V3", "alpha": 0.5}
     # ),
     # (
     #     "content_v3_alpha1",
@@ -402,106 +388,83 @@ class EvalConfig:
     #     {"features_method": "V3", "alpha": 10.0}
     # ),
     # (
-    #     "content_v3_alpha24",
+    #     "content_v3_alpha25",
     #     ContentBased,
-    #     {"features_method": "V3", "alpha": 24.0}
+    #     {"features_method": "V3", "alpha": 25.0}
     # ),
 
     # (
-    # "content_v4_alpha1",
-    # ContentBased,
-    # {"features_method": "V4", "alpha": 1.0}
-#),
-
-        # ------------------------------------------------------------------
-        # 5. LATENT FACTOR — commenté temporairement
-        # ------------------------------------------------------------------
-
-        # SVD — default vs tuned Optuna
-
-    # (
-    #     "svd_default",
-    #     SVDModel,
-    #     {
-    #         "n_factors":    5,
-    #         "n_epochs":     15,
-    #         "lr_all":       0.005,
-    #         "reg_all":      0.08,
-    #         "random_state": 42
-    #     }
+    #     "content_v4_alpha001",
+    #     ContentBased,
+    #     {"features_method": "V4", "alpha": 0.01}
     # ),
     # (
-    #     "svd_tuned",
-    #     SVDModel,
-    #     {
-    #         "n_factors":    100,
-    #         "n_epochs":     80,
-    #         "lr_all":       0.007565017481617904,
-    #         "reg_all":      0.10761653019253145,
-    #         "random_state": 42
-    #     }
+    #     "content_v4_alpha01",
+    #     ContentBased,
+    #     {"features_method": "V4", "alpha": 0.1}
+    # ),
+    # (
+    #     "content_v4_alpha05",
+    #     ContentBased,
+    #     {"features_method": "V4", "alpha": 0.5}
+    # ),
+    # (
+    #     "content_v4_alpha1",
+    #     ContentBased,
+    #     {"features_method": "V4", "alpha": 1.0}
+    # ),
+    # (
+    #     "content_v4_alpha5",
+    #     ContentBased,
+    #     {"features_method": "V4", "alpha": 5.0}
+    # ),
+    # (
+    #     "content_v4_alpha10",
+    #     ContentBased,
+    #     {"features_method": "V4", "alpha": 10.0}
+    # ),
+    # (
+    #     "content_v4_alpha25",
+    #     ContentBased,
+    #     {"features_method": "V4", "alpha": 25.0}
     # ),
 
-    # # # SVD — tuning n_factors
     # (
-    #     "svd_factors50",
-    #     SVDModel,
-    #     {
-    #         "n_factors":    50,
-    #         "n_epochs":     80,
-    #         "lr_all":       0.007565017481617904,
-    #         "reg_all":      0.10761653019253145,
-    #         "random_state": 42
-    #     }
+    #     "content_v5_alpha001",
+    #     ContentBased,
+    #     {"features_method": "V5", "alpha": 0.01}
     # ),
     # (
-    #     "svd_factors150",
-    #     SVDModel,
-    #     {
-    #         "n_factors":    150,
-    #         "n_epochs":     80,
-    #         "lr_all":       0.007565017481617904,
-    #         "reg_all":      0.10761653019253145,
-    #         "random_state": 42
-    #     }
+    #     "content_v5_alpha01",
+    #     ContentBased,
+    #     {"features_method": "V5", "alpha": 0.1}
     # ),
     # (
-    #     "svd_factors200",
-    #     SVDModel,
-    #     {
-    #         "n_factors":    200,
-    #         "n_epochs":     80,
-    #         "lr_all":       0.007565017481617904,
-    #         "reg_all":      0.10761653019253145,
-    #         "random_state": 42
-    #     }
+    #     "content_v5_alpha05",
+    #     ContentBased,
+    #     {"features_method": "V5", "alpha": 0.5}
     # ),
-        
-    #     (
-    #        "svd_default",
-    #        SVDModel,
-    #        {
-    #            "n_factors": 75,
-    #            "n_epochs":  50,
-    #            "lr_all":    0.005,
-    #            "reg_all":   0.08,
-    #            "random_state": 42
-    #        }
-    #     ),
-        
-    #     (
-
-    #        "svd_tuned",
-    #        SVDModel,
-    #        {
-    #            "n_factors":    100,
-    #            "n_epochs":     80,
-    #            "lr_all":       0.007565017481617904,
-    #            "reg_all":      0.10761653019253145,
-    #            "random_state": 42
-    #        }
-    #     ),
-    
+    # (
+    #     "content_v5_alpha1",
+    #     ContentBased,
+    #     {"features_method": "V5", "alpha": 1.0}
+    # ),
+    # (
+    #     "content_v5_alpha5",
+    #     ContentBased,
+    #     {"features_method": "V5", "alpha": 5.0}
+    # ),
+    # (
+    #     "content_v5_alpha10",
+    #     ContentBased,
+    #     {"features_method": "V5", "alpha": 10.0}
+    # ),
+    # (
+    #     "content_v5_alpha25",
+    #     ContentBased,
+    #     {"features_method": "V5", "alpha": 25.0}
+    # ),
+       
     ]
 
     # ----------------------------------------------------------------------

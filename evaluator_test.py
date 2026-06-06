@@ -24,6 +24,8 @@ from datetime import datetime
 import argparse
 import numpy as np
 import pandas as pd
+import json
+
 
 from surprise import accuracy, Dataset, Reader, SVD
 from surprise.model_selection import train_test_split
@@ -172,10 +174,11 @@ def tune_svd_optuna(n_trials: int = 30) -> dict:
         # On applique les contraintes demandées
         params = {
             # On cherche uniquement des petits facteurs (explicabilité préservée)
-            "n_factors": trial.suggest_int("n_factors", 5, 25),
+            "n_factors": trial.suggest_int("n_factors", 5, 55),
+            
             # On laisse Optuna trouver le bon moment pour s'arrêter
-            "n_epochs":  trial.suggest_int("n_epochs", 15, 50),
-            # CONSIGNE PROF : learning rate figé à la valeur standard de Surprise
+            "n_epochs":  trial.suggest_int("n_epochs", 15, 100),
+            
             "lr_all":    0.005,
             # On ajuste la régularisation globale
             "reg_all":   trial.suggest_float("reg_all", 0.02, 0.15, log=True),
@@ -265,9 +268,21 @@ def main():
     # Optuna SVD tuning si demandé
     if args.tune_svd:
         best_params = tune_svd_optuna(n_trials=args.n_trials)
-        if best_params:
-            print("\n  → SVD best params will be used if SVDModel is in configs_test.py")
-            print("    Update configs_test.py manually with these params if needed.\n")
+        
+    params_path = C.EVALUATION_PATH / "svd_best_params.json"
+    loaded_params = {}
+    
+    if params_path.exists():
+        try:
+            with open(params_path, "r") as f:
+                saved_data = json.load(f)
+                # On récupère le sous-dictionnaire "params" créé par ta fonction de tuning
+                loaded_params = saved_data.get("params", {})
+            print(f"-> Successfully loaded tuned SVD parameters from JSON.")
+        except Exception as e:
+            print(f"-> Warning: Could not read JSON parameters ({e}). Using defaults.")
+    else:
+        print("-> No tuned parameters found. Running SVD with library defaults.")
 
     # Évaluation standard
     print("=" * 65)
@@ -282,6 +297,11 @@ def main():
 
     for model_name, model_class, model_params in EvalConfig.models:
         print(f"\n→ Evaluating [{model_name}]...")
+
+        # Si c'est le modèle d'optuna et que des paramètres ont été chargés, on les injecte
+        if model_name == "svd_optuna_tuning" and loaded_params:
+            model_params = loaded_params
+
         try:
             result = evaluate_model(model_name, model_class, model_params)
             results.append(result)
