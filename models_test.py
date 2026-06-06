@@ -763,3 +763,75 @@ class SVDModel(SVD):
             reg_all=reg_all,
             random_state=random_state
         )
+
+
+# ===========================================================================
+# 10. HYBRID MODEL — SVD + ContentBased V3 + UserBased ITR
+# ===========================================================================
+
+class HybridModel(AlgoBase):
+    """
+    Modèle hybride pondéré : SVD + ContentBased V3 + UserBased ITR.
+
+    Stratégie : combinaison linéaire pondérée (Falk, 2019 — Chapter 12).
+
+    Poids par défaut :
+        w_svd     = 0.45  — meilleur nDCG@10
+        w_content = 0.30  — meilleur RMSE + cold-start
+        w_user    = 0.25  — meilleure diversité (ITR)
+    """
+
+    def __init__(self,
+                 w_svd:     float = 0.45,
+                 w_content: float = 0.30,
+                 w_user:    float = 0.25):
+        AlgoBase.__init__(self)
+        self.w_svd     = w_svd
+        self.w_content = w_content
+        self.w_user    = w_user
+
+        self.svd     = SVDModel(
+            n_factors=35, n_epochs=98,
+            lr_all=0.005, reg_all=0.0934, random_state=42
+        )
+        self.content = ContentBased(features_method="V3", alpha=1.0)
+        self.user    = UserBasedITRKNN(k=60, min_k=5)
+
+    def fit(self, trainset):
+        AlgoBase.fit(self, trainset)
+        print("  Fitting SVD...")
+        self.svd.fit(trainset)
+        print("  Fitting ContentBased V3...")
+        self.content.fit(trainset)
+        print("  Fitting ITR...")
+        self.user.fit(trainset)
+        return self
+
+    def estimate(self, u, i):
+        scores  = []
+        weights = []
+
+        try:
+            scores.append(self.svd.predict(u, i).est)
+            weights.append(self.w_svd)
+        except Exception:
+            pass
+
+        try:
+            scores.append(self.content.predict(u, i).est)
+            weights.append(self.w_content)
+        except Exception:
+            pass
+
+        try:
+            scores.append(self.user.predict(u, i).est)
+            weights.append(self.w_user)
+        except Exception:
+            pass
+
+        if not scores:
+            raise PredictionImpossible("All models failed.")
+
+        total_w = sum(weights)
+        pred    = sum(s * w for s, w in zip(scores, weights)) / total_w
+        return float(np.clip(pred, C.RATINGS_SCALE[0], C.RATINGS_SCALE[1]))

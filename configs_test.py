@@ -12,6 +12,7 @@ Les décommenter quand nécessaire.
 """
 
 from models_test import (
+    HybridModel,
     ModelBaselineMean,
     UserBasedITRKNN,
     UserBasedCosineKNN,
@@ -25,7 +26,11 @@ from models_test import (
 class EvalConfig:
     models = [
 
-        ("svd_optuna_tuning", SVDModel, {}),
+        ("hybrid_045_030_025", HybridModel, {"w_svd": 0.45, "w_content": 0.30, "w_user": 0.25}),
+        # ("hybrid_040_030_030", HybridModel, {"w_svd": 0.40, "w_content": 0.30, "w_user": 0.30}),
+        # ("hybrid_050_025_025", HybridModel, {"w_svd": 0.50, "w_content": 0.25, "w_user": 0.25}),
+
+        #("svd_optuna_tuning", SVDModel, {}),
     
         # ITR union — tuning k (min_k=5 fixé)
     # ("user_itr_k20_mink5",  UserBasedITRKNN, {"k": 20,  "min_k": 5}),

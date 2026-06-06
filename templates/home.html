@@ -66,8 +66,8 @@
 
 <!-- ── Search + Genre filters ────────────────────────────── -->
 <div class="section-title">
-  <h2>Featured this week</h2>
-  <p>Ranked by Bayesian weighted score.</p>
+  <h2>Home</h2>
+  <p>Ranked by Bayesian weighted score. <span id="results-count" style="color:var(--accent);font-weight:500;"></span></p>
 </div>
 
 <div class="search-filter-bar">
@@ -89,47 +89,15 @@
 </div>
 
 <!-- ── Movie Grid ─────────────────────────────────────────── -->
-<section class="movie-grid" id="movie-grid">
-  {% for movie in featured_movies %}
-  <article class="movie-card"
-           data-title="{{ movie.title | lower }}"
-           data-genres="{{ movie.genres }}">
-    <div class="movie-poster-wrapper">
-      {% if movie.poster_url %}
-      <img src="{{ movie.poster_url }}" alt="{{ movie.title }}"
-           class="movie-poster-img"
-           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-      <div class="movie-poster-placeholder" style="display:none;">🎬</div>
-      {% else %}
-      <div class="movie-poster-placeholder">🎬</div>
-      {% endif %}
-      {% if movie.overview %}
-      <div class="movie-overlay">
-        <p class="movie-overview">{{ movie.overview[:150] }}{% if movie.overview|length > 150 %}…{% endif %}</p>
-      </div>
-      {% endif %}
-    </div>
-    <div class="movie-card-body">
-      <h3>{{ movie.title }}</h3>
-      <p class="genres">{{ movie.genres }}</p>
-      <div class="metrics-row">
-        <div>
-          <span>Rating</span>
-          <strong>{{ "%.2f"|format(movie.rating_mean) }}</strong>
-        </div>
-        <div>
-          <span>Votes</span>
-          <strong>{{ movie.rating_count }}</strong>
-        </div>
-        <div>
-          <span>Score</span>
-          <strong>{{ "%.2f"|format(movie.weighted_score) }}</strong>
-        </div>
-      </div>
-    </div>
-  </article>
-  {% endfor %}
-</section>
+<section class="movie-grid" id="movie-grid"></section>
+
+<!-- ── Load More ─────────────────────────────────────────── -->
+<div id="load-more-container" style="text-align:center; margin-top:32px; margin-bottom:48px;">
+  <button class="secondary-button" id="load-more-btn" onclick="loadMore()" style="display:none;">
+    Load more films
+  </button>
+  <p id="load-more-info" style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;font-weight:300;"></p>
+</div>
 
 <!-- ── Surprise Me ────────────────────────────────────────── -->
 <div style="text-align:center; margin-top:48px; padding:40px 0;
@@ -152,17 +120,10 @@
   margin-bottom: 8px;
 }
 .mood-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  padding: 18px 14px;
-  cursor: pointer;
-  text-align: center;
-  transition: all 0.18s;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  font-family: 'DM Sans', sans-serif;
+  background: var(--bg-card); border: 1px solid var(--border);
+  padding: 18px 14px; cursor: pointer; text-align: center;
+  transition: all 0.18s; display: flex; flex-direction: column;
+  align-items: center; gap: 5px; font-family: 'DM Sans', sans-serif;
 }
 .mood-btn:hover { border-color: var(--border-dark); background: var(--bg-elevated); }
 .mood-btn.active { background: var(--accent); border-color: var(--accent); }
@@ -198,92 +159,145 @@
 .genre-btn:hover { border-color: var(--border-dark); color: var(--text); }
 .genre-btn.active { background: var(--text); border-color: var(--text); color: var(--bg); }
 
-/* Poster */
 .movie-poster-wrapper {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 2/3;
-  overflow: hidden;
-  background: var(--bg-elevated);
+  position: relative; width: 100%; aspect-ratio: 2/3;
+  overflow: hidden; background: var(--bg-elevated);
 }
 .movie-poster-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  width: 100%; height: 100%; object-fit: cover; display: block;
   transition: transform 0.3s ease;
 }
 .movie-card:hover .movie-poster-img { transform: scale(1.04); }
 .movie-poster-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.5rem;
+  width: 100%; height: 100%; display: flex; align-items: center;
+  justify-content: center; font-size: 2.5rem;
   background: linear-gradient(135deg, var(--bg-elevated), var(--bg-card));
 }
 .movie-overlay {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
+  position: absolute; bottom: 0; left: 0; right: 0;
   background: linear-gradient(to top, rgba(26,18,8,0.92) 0%, transparent 100%);
-  padding: 24px 12px 10px;
-  opacity: 0;
-  transition: opacity 0.25s;
+  padding: 24px 12px 10px; opacity: 0; transition: opacity 0.25s;
 }
 .movie-card:hover .movie-overlay { opacity: 1; }
 .movie-overview {
-  font-size: 0.72rem;
-  color: rgba(245,240,232,0.85);
-  line-height: 1.5;
-  font-weight: 300;
-  margin: 0;
+  font-size: 0.72rem; color: rgba(245,240,232,0.85);
+  line-height: 1.5; font-weight: 300; margin: 0;
 }
 
 .surprise-card {
   background: var(--bg-card); border: 1px solid var(--border-dark);
-  padding: 22px 24px; text-align: left;
-  display: flex; gap: 20px; align-items: flex-start;
+  padding: 22px 24px; text-align: left; display: flex; gap: 20px; align-items: flex-start;
 }
-.surprise-poster {
-  width: 80px; flex-shrink: 0;
-  aspect-ratio: 2/3; object-fit: cover;
-  border: 1px solid var(--border);
-}
+.surprise-poster { width: 80px; flex-shrink: 0; aspect-ratio: 2/3; object-fit: cover; border: 1px solid var(--border); }
 .surprise-poster-placeholder {
-  width: 80px; flex-shrink: 0;
-  aspect-ratio: 2/3;
-  background: var(--bg-elevated);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.5rem;
+  width: 80px; flex-shrink: 0; aspect-ratio: 2/3; background: var(--bg-elevated);
+  display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
 }
-.surprise-info h3 {
-  font-family: 'DM Serif Display', serif;
-  font-size: 1.1rem; color: var(--text); margin-bottom: 6px;
-}
+.surprise-info h3 { font-family: 'DM Serif Display', serif; font-size: 1.1rem; color: var(--text); margin-bottom: 6px; }
 .surprise-info .genres { margin-bottom: 8px; }
-.surprise-info .overview-text {
-  font-size: 0.78rem; color: var(--text-muted);
-  font-weight: 300; line-height: 1.6; margin-bottom: 12px;
-}
-.surprise-again {
-  background: none; border: none; color: var(--accent);
-  font-family: 'DM Sans', sans-serif; font-size: 0.82rem;
-  cursor: pointer; padding: 0; text-decoration: underline;
-}
+.surprise-info .overview-text { font-size: 0.78rem; color: var(--text-muted); font-weight: 300; line-height: 1.6; margin-bottom: 12px; }
+.surprise-again { background: none; border: none; color: var(--accent); font-family: 'DM Sans', sans-serif; font-size: 0.82rem; cursor: pointer; padding: 0; text-decoration: underline; }
 </style>
 
 <!-- ── JS ─────────────────────────────────────────────────── -->
 <script>
 const ALL_FEATURED = {{ featured_movies | tojson | safe }};
+const PAGE_SIZE    = 24;
 let activeMoodGenres   = null;
 let activeGenreFilters = new Set();
+let currentFiltered    = [];
+let currentShown       = 0;
+
+function buildCard(movie) {
+  const posterHtml = movie.poster_url
+    ? `<img src="${movie.poster_url}" alt="${movie.title}" class="movie-poster-img"
+            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+       <div class="movie-poster-placeholder" style="display:none;">🎬</div>`
+    : `<div class="movie-poster-placeholder">🎬</div>`;
+
+  const overviewHtml = movie.overview
+    ? `<div class="movie-overlay"><p class="movie-overview">${movie.overview.slice(0,150)}${movie.overview.length>150?'…':''}</p></div>`
+    : '';
+
+  return `
+    <article class="movie-card"
+             data-title="${movie.title.toLowerCase()}"
+             data-genres="${movie.genres}">
+      <div class="movie-poster-wrapper">
+        ${posterHtml}
+        ${overviewHtml}
+      </div>
+      <div class="movie-card-body">
+        <h3>${movie.title}</h3>
+        <p class="genres">${movie.genres}</p>
+        <div class="metrics-row">
+          <div><span>Rating</span><strong>${movie.rating_mean.toFixed(2)}</strong></div>
+          <div><span>Votes</span><strong>${movie.rating_count}</strong></div>
+          <div><span>Score</span><strong>${movie.weighted_score.toFixed(2)}</strong></div>
+        </div>
+      </div>
+    </article>`;
+}
+
+function renderGrid() {
+  const grid    = document.getElementById('movie-grid');
+  const batch   = currentFiltered.slice(currentShown, currentShown + PAGE_SIZE);
+  batch.forEach(m => grid.insertAdjacentHTML('beforeend', buildCard(m)));
+  currentShown += batch.length;
+  updateLoadMore();
+  updateCount();
+}
+
+function updateLoadMore() {
+  const btn  = document.getElementById('load-more-btn');
+  const info = document.getElementById('load-more-info');
+  const remaining = currentFiltered.length - currentShown;
+  if (remaining > 0) {
+    btn.style.display = 'inline-block';
+    btn.textContent   = `Load ${Math.min(PAGE_SIZE, remaining)} more films`;
+    info.textContent  = `Showing ${currentShown} of ${currentFiltered.length} films`;
+  } else {
+    btn.style.display = 'none';
+    info.textContent  = currentFiltered.length > 0
+      ? `All ${currentFiltered.length} films shown`
+      : '';
+  }
+}
+
+function updateCount() {
+  const el = document.getElementById('results-count');
+  if (el) el.textContent = currentFiltered.length > 0
+    ? `${currentFiltered.length} film${currentFiltered.length > 1 ? 's' : ''}`
+    : '';
+  document.getElementById('no-results').style.display =
+    currentFiltered.length === 0 ? '' : 'none';
+}
+
+function applyFilters() {
+  const query = (document.getElementById('movie-search-home').value || '').toLowerCase().trim();
+  currentFiltered = ALL_FEATURED.filter(m => {
+    const matchText = !query || m.title.toLowerCase().includes(query);
+    const matchGenre = activeGenreFilters.size === 0 ||
+      [...activeGenreFilters].every(g => m.genres && m.genres.includes(g));
+    let matchMood = true;
+    if (activeMoodGenres) {
+      const moodList = activeMoodGenres.split('|');
+      matchMood = moodList.some(mg => m.genres && m.genres.includes(mg));
+    }
+    return matchText && matchGenre && matchMood;
+  });
+  document.getElementById('movie-grid').innerHTML = '';
+  currentShown = 0;
+  renderGrid();
+}
+
+function loadMore() { renderGrid(); }
 
 function selectMood(btn) {
   document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   activeMoodGenres = btn.dataset.genres || null;
-  filterMovies();
+  applyFilters();
 }
 
 function skipMood(btn) {
@@ -293,7 +307,7 @@ function skipMood(btn) {
   activeMoodGenres   = null;
   activeGenreFilters = new Set();
   document.getElementById('movie-search-home').value = '';
-  filterMovies();
+  applyFilters();
 }
 
 function toggleGenre(btn) {
@@ -303,39 +317,19 @@ function toggleGenre(btn) {
   } else {
     activeGenreFilters.add(g); btn.classList.add('active');
   }
-  filterMovies();
+  applyFilters();
 }
 
-function filterMovies() {
-  const query   = (document.getElementById('movie-search-home').value || '').toLowerCase().trim();
-  const cards   = document.querySelectorAll('.movie-card');
-  let   visible = 0;
-  cards.forEach(card => {
-    const title  = card.dataset.title  || '';
-    const genres = card.dataset.genres || '';
-    const matchText        = !query || title.includes(query);
-    const matchGenreFilter = activeGenreFilters.size === 0 ||
-      [...activeGenreFilters].every(g => genres.includes(g));
-    let matchMood = true;
-    if (activeMoodGenres) {
-      const moodList = activeMoodGenres.split('|');
-      matchMood = moodList.some(mg => genres.includes(mg));
-    }
-    const show = matchText && matchGenreFilter && matchMood;
-    card.style.display = show ? '' : 'none';
-    if (show) visible++;
-  });
-  document.getElementById('no-results').style.display = visible === 0 ? '' : 'none';
-}
+function filterMovies() { applyFilters(); }
 
 function surpriseMe() {
   const btn = document.getElementById('surprise-btn');
   btn.textContent = '⏳ Picking a movie...';
   btn.disabled = true;
-  let pool = ALL_FEATURED;
+  let pool = currentFiltered.length > 0 ? currentFiltered : ALL_FEATURED;
   if (activeMoodGenres) {
     const moodList = activeMoodGenres.split('|');
-    pool = pool.filter(m => moodList.some(mg => m.genres && m.genres.includes(mg)));
+    pool = ALL_FEATURED.filter(m => moodList.some(mg => m.genres && m.genres.includes(mg)));
   }
   if (!pool.length) pool = ALL_FEATURED;
   const movie  = pool[Math.floor(Math.random() * pool.length)];
@@ -344,7 +338,7 @@ function surpriseMe() {
     ? `<img src="${movie.poster_url}" class="surprise-poster" alt="${movie.title}" onerror="this.style.display='none'">`
     : `<div class="surprise-poster-placeholder">🎬</div>`;
   const overviewHtml = movie.overview
-    ? `<p class="overview-text">${movie.overview.slice(0, 200)}${movie.overview.length > 200 ? '…' : ''}</p>`
+    ? `<p class="overview-text">${movie.overview.slice(0,200)}${movie.overview.length>200?'…':''}</p>`
     : '';
   result.innerHTML = `
     <div class="surprise-card">
@@ -366,6 +360,9 @@ function surpriseMe() {
   btn.textContent = '🎲 Surprise me';
   btn.disabled = false;
 }
+
+// Init
+applyFilters();
 </script>
 
 {% endblock %}
