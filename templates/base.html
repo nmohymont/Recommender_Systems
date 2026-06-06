@@ -10,9 +10,9 @@
   <nav class="navbar">
     <div class="logo">MovieMatch</div>
     <div class="nav-links">
-      <a href="{{ url_for('home') }}"       {% if request.endpoint == 'home'       %}class="active"{% endif %}>Featured</a>
+      <a href="{{ url_for('home') }}"       {% if request.endpoint == 'home'       %}class="active"{% endif %}>Discover</a>
       <a href="{{ url_for('individual') }}" {% if request.endpoint == 'individual' %}class="active"{% endif %}>For You</a>
-      <a href="{{ url_for('group') }}"      {% if request.endpoint == 'group'      %}class="active"{% endif %}>Netflix Party</a>
+      <a href="{{ url_for('group') }}"      {% if request.endpoint == 'group'      %}class="active"{% endif %}>Movie Night</a>
     </div>
   </nav>
   <main class="page">

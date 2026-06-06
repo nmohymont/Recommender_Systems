@@ -46,10 +46,9 @@ class Constant:
     #   Item-based   (0.25) : meilleur RMSE des KNN (0.876 sur small)
     #   Content-based(0.10) : diversité + cold-start (userId=-1)
     # ------------------------------------------------------------------
-    HYBRID_SVD_WEIGHT          = 0.40
-    HYBRID_USER_BASED_WEIGHT   = 0.25
-    HYBRID_ITEM_BASED_WEIGHT   = 0.25
-    HYBRID_CONTENT_BASED_WEIGHT= 0.10
+    HYBRID_SVD_WEIGHT          = 0.45
+    HYBRID_USER_BASED_WEIGHT   = 0.30
+    HYBRID_CONTENT_BASED_WEIGHT= 0.25
 
     # Default top-N
     TOP_N_VALUE = 10
