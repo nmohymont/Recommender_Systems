@@ -4,7 +4,7 @@
 <section class="page-header">
   <span class="eyebrow">Netflix Party</span>
   <h1>Find a movie<br><em>everyone</em> will enjoy.</h1>
-  <p>Select your profile, add your friends and pick movies you want to see tonight. The system finds the best match for the whole group.</p>
+  <p>Select your profiles, add movies you want to see tonight. The system finds the best match for the whole group.</p>
 </section>
 
 <form method="POST" id="party-form">
@@ -68,52 +68,28 @@
       </div>
       {% endfor %}
     {% else %}
-      <!-- Participant 0 : profil enregistré -->
-      <div class="participant-row" id="participant-0">
+      {% for idx in range(2) %}
+      <div class="participant-row" id="participant-{{ idx }}">
         <div class="participant-name" style="margin-bottom:14px;">
-          <div class="participant-avatar" id="avatar-0">★</div>
-          <span style="font-size:0.72rem;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);">You</span>
-        </div>
-        <div class="form-group" style="margin-bottom:14px;">
-          <label>Your profile</label>
-          <select name="participant_user_id_0" onchange="onUserSelect(0, this.value)"
-                  style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
-                         padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;width:100%;">
-            <option value="">— Select a profile —</option>
-            {% for user in all_users %}
-            <option value="{{ user.id }}">{{ user.name }}</option>
-            {% endfor %}
-          </select>
-          <input type="hidden" name="participant_name_0" id="name-p0" value="">
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-          <h4 style="font-size:0.72rem;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin:0;">Movies you want to see tonight</h4>
-          <span class="counter-badge" id="counter-0-wishlist">0/5</span>
-        </div>
-        <div class="search-container" data-participant="0" data-type="wishlist">
-          <input type="text" class="movie-search-input" placeholder="Search a movie..."
-                 style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
-                        padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;
-                        width:100%;margin-bottom:7px;">
-          <div class="search-dropdown" style="display:none;background:var(--bg-card);border:1px solid var(--border-dark);
-               max-height:180px;overflow-y:auto;margin-top:-6px;margin-bottom:8px;"></div>
-          <div class="picked-movies"></div>
-        </div>
-      </div>
-      <!-- Participant 1 par défaut -->
-      <div class="participant-row" id="participant-1">
-        <div class="participant-name" style="margin-bottom:14px;">
-          <div class="participant-avatar" id="avatar-1">?</div>
-          <input type="text" name="participant_name_1" placeholder="Name"
-                 oninput="updateAvatar(1, this.value)"
-                 style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
-                        padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.88rem;outline:none;width:200px;">
+          <div class="participant-avatar" id="avatar-{{ idx }}">?</div>
+          <div>
+            <select name="participant_user_id_{{ idx }}" id="select-p{{ idx }}"
+                    onchange="onUserSelect({{ idx }}, this.value)" required
+                    style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
+                           padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;width:220px;">
+              <option value="">— Select a profile —</option>
+              {% for user in all_users %}
+              <option value="{{ user.id }}">{{ user.name }}</option>
+              {% endfor %}
+            </select>
+            <input type="hidden" name="participant_name_{{ idx }}" id="name-p{{ idx }}" value="">
+          </div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
           <h4 style="font-size:0.72rem;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin:0;">Movies they want to see tonight</h4>
-          <span class="counter-badge" id="counter-1-wishlist">0/5</span>
+          <span class="counter-badge" id="counter-{{ idx }}-wishlist">0/5</span>
         </div>
-        <div class="search-container" data-participant="1" data-type="wishlist">
+        <div class="search-container" data-participant="{{ idx }}" data-type="wishlist">
           <input type="text" class="movie-search-input" placeholder="Search a movie..."
                  style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
                         padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;
@@ -123,6 +99,7 @@
           <div class="picked-movies"></div>
         </div>
       </div>
+      {% endfor %}
     {% endif %}
   </div>
 
@@ -141,7 +118,6 @@
 {% if group_recommendations %}
 <div class="section-title">
   <h2>Best movies for the group</h2>
-  <p>Strategy: <strong>{{ "Everyone happy" if strategy != "least_misery" else "No one disappointed" }}</strong></p>
 </div>
 <div class="recommendations-list">
   {% for movie in group_recommendations %}
@@ -198,9 +174,24 @@ const ALL_USERS      = {{ all_users | tojson | safe }};
 
 function onUserSelect(idx, userId) {
   const nameInput = document.getElementById('name-p' + idx);
-  const user = ALL_USERS.find(u => String(u.id) === String(userId));
+  const avatar    = document.getElementById('avatar-' + idx);
+  const user      = ALL_USERS.find(u => String(u.id) === String(userId));
   if (nameInput) nameInput.value = user ? user.name : '';
+  if (avatar)    avatar.textContent = user ? user.name[0].toUpperCase() : '?';
 }
+
+// Validate all participants have selected a profile before submit
+document.getElementById('party-form').addEventListener('submit', function(e) {
+  const selects = document.querySelectorAll('select[name^="participant_user_id_"]');
+  for (const sel of selects) {
+    if (!sel.value) {
+      e.preventDefault();
+      alert('All participants must select a profile before finding a movie.');
+      sel.style.borderColor = 'var(--accent)';
+      return;
+    }
+  }
+});
 let participantCount = {{ n_participants | default(2) }};
 
 function updateAvatar(idx, val) {
@@ -227,13 +218,21 @@ function addParticipant() {
   const div = document.createElement('div');
   div.className = 'participant-row';
   div.id = 'participant-' + idx;
+  // Build options from ALL_USERS
+  const opts = ALL_USERS.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
   div.innerHTML = `
     <div class="participant-name" style="margin-bottom:14px;">
       <div class="participant-avatar" id="avatar-${idx}">?</div>
-      <input type="text" name="participant_name_${idx}" placeholder="Name"
-             oninput="updateAvatar(${idx}, this.value)"
-             style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
-                    padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.88rem;outline:none;width:200px;">
+      <div>
+        <select name="participant_user_id_${idx}" id="select-p${idx}"
+                onchange="onUserSelect(${idx}, this.value)" required
+                style="background:var(--bg);border:1px solid var(--border-dark);color:var(--text);
+                       padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;width:220px;">
+          <option value="">— Select a profile —</option>
+          ${opts}
+        </select>
+        <input type="hidden" name="participant_name_${idx}" id="name-p${idx}" value="">
+      </div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
       <h4 style="font-size:0.72rem;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin:0;">Movies they want to see tonight</h4>

@@ -1,16 +1,3 @@
-"""
-app.py
-======
-Interface Flask de MovieMatch.
-
-Routes
-------
-/               → home         : catalogue de films
-/movie/<id>     → movie_detail : détail d'un film
-/individual     → individual   : recommandations personnalisées
-/group          → group        : Movie Night
-"""
-
 from flask import Flask, render_template, request
 import pandas as pd
 import json
@@ -54,7 +41,7 @@ def save_registered_user(name: str, user_id: int, movie_ratings: dict):
 # Initialisation au démarrage
 # ---------------------------------------------------------------------------
 print("Training hybrid recommender...")
-recommender = HybridRecommender(use_implicit=True, use_content=True)
+recommender = HybridRecommender(use_implicit=True, use_content=False)
 recommender.fit()
 print("Models trained successfully.")
 
@@ -81,9 +68,16 @@ def enrich_with_tmdb(records: list) -> list:
 
 
 
-ALL_MOVIES_JSON = load_movies()[
-    [C.ITEM_ID_COL, C.LABEL_COL]
-].rename(columns={C.ITEM_ID_COL: "movieId", C.LABEL_COL: "title"}).to_dict(orient="records")
+# Build movies list with poster URLs for the new user rating grid
+_movies_df = load_movies()
+ALL_MOVIES_JSON = []
+for _, _row in _movies_df.iterrows():
+    _mid = int(_row[C.ITEM_ID_COL])
+    ALL_MOVIES_JSON.append({
+        "movieId":    _mid,
+        "title":      _row[C.LABEL_COL],
+        "poster_url": TMDB.loc[_mid, "poster_url"] if _mid in TMDB.index else "",
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +148,7 @@ def individual():
                     "genres":       row[C.GENRES_COL],
                     "final_score":  round(row["final_score"], 2),
                     "svd_score":    round(row["svd_score"],   2),
-                    "item_score":   round(row["item_score"],  2),
+                    "itr_score":    round(row["itr_score"],   2),
                     "explanation":  recommender.explain(selected_user, mid),
                     "poster_url":   tmdb_row["poster_url"]   if tmdb_row is not None else "",
                     "overview":     tmdb_row["overview"]     if tmdb_row is not None else "",
@@ -203,7 +197,7 @@ def individual():
                         "genres":       row[C.GENRES_COL],
                         "final_score":  round(row["final_score"], 2),
                         "svd_score":    round(row["svd_score"],   2),
-                        "item_score":   round(row["item_score"],  2),
+                        "itr_score":    round(row["itr_score"],   2),
                         "explanation":  "Based on your content profile.",
                         "poster_url":   tmdb_row["poster_url"]   if tmdb_row is not None else "",
                         "overview":     tmdb_row["overview"]     if tmdb_row is not None else "",
